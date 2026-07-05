@@ -477,7 +477,7 @@ async function agregarRegistro(nivel, fechaStr, comida) {
 }
 
 // ============================================================
-// EXPORTAR CSV - Formato por día y comidas
+// EXPORTAR CSV - Formato por día y comidas (CORREGIDO)
 // ============================================================
 function exportarCSV() {
     if (!registros.length) {
@@ -497,8 +497,8 @@ function exportarCSV() {
 
     const diasOrdenados = Object.keys(registrosPorDia).sort();
 
-    // Crear CSV con estructura por día
-    let csv = 'Fecha,Ayuno (mg/dL),Almuerzo (mg/dL),Cena (mg/dL),Máximo Diario\n';
+    // Crear CSV con estructura por día - SIN comillas extras
+    let csv = 'Fecha;Ayuno (mg/dL);Almuerzo (mg/dL);Cena (mg/dL);Máximo Diario\n';
     diasOrdenados.forEach(dia => {
         const r = registrosPorDia[dia];
         const valores = [];
@@ -507,10 +507,12 @@ function exportarCSV() {
         if (r.cena !== null) valores.push(r.cena);
         const maximo = valores.length > 0 ? Math.max(...valores) : '';
 
+        // Formatear fecha sin comillas
         const fechaFormateada = formatearFecha(dia);
-        csv += `"${fechaFormateada}",${r.ayuno !== null ? r.ayuno : ''},${r.almuerzo !== null ? r.almuerzo : ''},${r.cena !== null ? r.cena : ''},${maximo}\n`;
+        csv += `${fechaFormateada};${r.ayuno !== null ? r.ayuno : ''};${r.almuerzo !== null ? r.almuerzo : ''};${r.cena !== null ? r.cena : ''};${maximo}\n`;
     });
 
+    // Crear blob con UTF-8 BOM para compatibilidad con Excel
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -520,7 +522,6 @@ function exportarCSV() {
     URL.revokeObjectURL(url);
     mostrarMensaje('📥 CSV exportado correctamente', 'success');
 }
-
 // ============================================================
 // INICIALIZAR APP
 // ============================================================
