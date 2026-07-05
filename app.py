@@ -1,147 +1,393 @@
-import streamlit as st
+#!/usr/bin/env python3
+"""
+Glisemia Tracker
+-----------------
+Registro diario de glisemia (ayuno, almuerzo, cena), con:
+  - Almacenamiento local en CSV
+  - Sincronización con Google Drive (subir / descargar)
+  - Comparativa contra el registro anterior + gráfico de tendencia
+  - Salida atractiva en consola usando 'rich'
+
+Autor: generado con Claude
+"""
+
+import csv
+import json
+import os
+from datetime import date, datetime
+
 import pandas as pd
-import requests
-from datetime import datetime
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
 
-# Configuración del Dashboard Profesional
-st.set_page_config(page_title="Control de Glucemia Profesional", layout="wide", page_icon="🩸")
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
-# 1. Perfil de la Paciente (Barra Lateral)
-st.sidebar.header("👤 Perfil de la Paciente")
-st.sidebar.markdown("**Edad:** 45 años")
-st.sidebar.markdown("**Sexo:** Femenino")
-st.sidebar.markdown("**Antecedentes:** Diabetes Mellitus")
-st.sidebar.divider()
+# --------------------------------------------------------------------------
+# Configuración
+# --------------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
+CSV_PATH = os.path.join(DATA_DIR, "glisemia.csv")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials.json")
 
-st.title("🩸 Panel de Control de Glucemia Diaria")
-st.markdown("Registre y analice sus niveles de azúcar de forma rápida y visual.")
+CSV_COLUMNS = ["fecha", "ayuno", "almuerzo", "cena"]
 
-# -----------------------------------------------------------------------------
-# ⚠️ CONFIGURACIÓN ÚNICA (Reemplaza con tus datos de Google)
-# -----------------------------------------------------------------------------
-ENLACE_EXCEL_LECTURA = "https://docs.google.com/spreadsheets/d/1RctsYdty_QuhJac_rNurDEBtXoVFxVToXSXyxuT1tZ8/edit?usp=sharing"
+console = Console()
 
-# Para el envío automático, necesitamos el ID de tu formulario de Google y los IDs de las preguntas.
-# Reemplaza esto con los datos de tu Google Form (Ver instrucciones abajo)
-FORM_ID = "1FAIpQLSfXXXXXXXXXXXXX"  # Reemplaza con el ID real de tu formulario
-ENTRY_FECHA = "entry.111111111"      # ID de la pregunta Fecha
-ENTRY_AYUNO = "entry.222222222"      # ID de la pregunta Ayuno
-ENTRY_ALMUERZO = "entry.333333333"   # ID de la pregunta Almuerzo
-ENTRY_CENA = "entry.444444444"       # ID de la pregunta Cena
-ENTRY_NOTAS = "entry.555555555"      # ID de la pregunta Notas
-# -----------------------------------------------------------------------------
+# Umbrales de referencia (mg/dL) - valores orientativos generales para
+# adultos sin diagnóstico previo. NO reemplaza indicación médica.
+THRESHOLDS = {
+    "ayuno":    {"normal": (0, 99),   "prediabetes": (100, 125), "alto_desde": 126},
+    "almuerzo": {"normal": (0, 139),  "prediabetes": (140, 199), "alto_desde": 200},
+    "cena":     {"normal": (0, 139),  "prediabetes": (140, 199), "alto_desde": 200},
+}
 
-# Función para leer el Excel en tiempo real
-def cargar_datos_reales(url):
-    try:
-        csv_url = url.replace('/edit?usp=sharing', '/export?format=csv').replace('/edit#gid=', '/export?format=csv&gid=')
-        df = pd.read_csv(csv_url)
-        df.columns = [col.lower() for col in df.columns]
-        if len(df.columns) == 6:
-            df.columns = ["timestamp", "fecha", "ayuno", "almuerzo", "cena", "notas"]
-        return df
-    except:
-        return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena", "notas"])
 
-df_datos = cargar_datos_reales(ENLACE_EXCEL_LECTURA)
+def clasificar(valor, columna):
+    """Devuelve (etiqueta, color) según el valor y la columna."""
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return "-", "dim"
+    t = THRESHOLDS[columna]
+    if t["normal"][0] <= valor <= t["normal"][1]:
+        return "Normal", "green"
+    if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
+        return "Elevado", "yellow"
+    return "Alto", "red"
 
-# 2. SECCIÓN PUNCHY: INGRESO NATIVO DE DATOS
-st.subheader("📝 Registrar Nueva Toma del Día")
-with st.form(key="registro_directo", clear_on_submit=True):
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        f_ingreso = st.date_input("Fecha de la Toma", datetime.now())
-    with col2:
-        v_ayuno = st.number_input("Ayuno (mg/dL)", min_value=0, max_value=500, step=1, help="Normal: < 100 mg/dL")
-    with col3:
-        v_almuerzo = st.number_input("Almuerzo (mg/dL)", min_value=0, max_value=500, step=1, help="Normal: < 140 mg/dL")
-    with col4:
-        v_cena = st.number_input("Cena (mg/dL)", min_value=0, max_value=500, step=1, help="Normal: < 140 mg/dL")
-        
-    v_notas = st.text_input("Observaciones o Síntomas (opcional)")
-    boton_guardar = st.form_submit_button("Guardar en Google Drive", use_container_width=True)
 
-if boton_guardar:
-    if FORM_ID == "1FAIpQLSfXXXXXXXXXXXXX":
-        st.error("⚠️ El registro falló: Debes configurar primero el FORM_ID y los Entry IDs de tu formulario en el código.")
-    else:
-        # Envío invisible en segundo plano a Google Sheets a través de la API pública de formularios
-        url_envio = f"https://google.com{FORM_ID}/formResponse"
-        payload = {
-            ENTRY_FECHA: f_ingreso.strftime("%Y-%m-%d"),
-            ENTRY_AYUNO: v_ayuno if v_ayuno > 0 else "",
-            ENTRY_ALMUERZO: v_almuerzo if v_almuerzo > 0 else "",
-            ENTRY_CENA: v_cena if v_cena > 0 else "",
-            ENTRY_NOTAS: v_notas
-        }
+# --------------------------------------------------------------------------
+# Manejo de datos locales
+# --------------------------------------------------------------------------
+def asegurar_csv():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if not os.path.exists(CSV_PATH):
+        with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(CSV_COLUMNS)
+
+
+def cargar_datos() -> pd.DataFrame:
+    asegurar_csv()
+    df = pd.read_csv(CSV_PATH)
+    for col in CSV_COLUMNS:
+        if col not in df.columns:
+            df[col] = pd.NA
+    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+    df = df.sort_values("fecha").reset_index(drop=True)
+    return df
+
+
+def guardar_datos(df: pd.DataFrame):
+    df_out = df.copy()
+    df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
+    df_out.to_csv(CSV_PATH, index=False, columns=CSV_COLUMNS)
+
+
+def pedir_float(mensaje):
+    while True:
+        raw = console.input(mensaje).strip()
+        if raw == "":
+            return None
         try:
-            requests.post(url_envio, data=payload)
-            st.success("¡Medición guardada con éxito en tu Excel! Refrescando panel...")
-            st.rerun()
-        except:
-            st.error("Error de conexión al guardar los datos.")
+            return float(raw)
+        except ValueError:
+            console.print("[red]Ingresa un número válido o deja vacío para omitir.[/red]")
 
-st.divider()
 
-# 3. SECCIÓN: MÉTRICAS ÚTILES Y ALERTAS CLARAS
-st.subheader("📊 Análisis y Estado de Alertas")
+def agregar_registro():
+    console.print(Panel.fit("Nuevo registro de glisemia", style="bold cyan"))
+    fecha_raw = console.input(f"Fecha [YYYY-MM-DD] (Enter = hoy {date.today()}): ").strip()
+    fecha = fecha_raw if fecha_raw else date.today().isoformat()
+    try:
+        fecha_dt = pd.to_datetime(fecha)
+    except Exception:
+        console.print("[red]Fecha inválida. Se usará la fecha de hoy.[/red]")
+        fecha_dt = pd.to_datetime(date.today())
 
-if not df_datos.empty and 'fecha' in df_datos.columns:
-    df_datos['fecha'] = pd.to_datetime(df_datos['fecha']).dt.strftime('%Y-%m-%d')
-    df_datos = df_datos.sort_values(by="fecha").reset_index(drop=True)
-    fechas_registradas = df_datos['fecha'].unique()
-    
-    if len(fechas_registradas) >= 1:
-        f_actual = fechas_registradas[-1]
-        ultimo_registro = df_datos[df_datos['fecha'] == f_actual].iloc[-1]
-        
-        a_hoy = ultimo_idx = ultimo_registro.get('ayuno')
-        al_hoy = ultimo_registro.get('almuerzo')
-        c_hoy = ultimo_registro.get('cena')
-        
-        # Calcular variaciones vs día anterior si existe
-        d_ayuno, d_almuerzo, d_cena = None, None, None
-        if len(fechas_registradas) >= 2:
-            f_previa = fechas_registradas[-2]
-            registro_previo = df_datos[df_datos['fecha'] == f_previa].iloc[-1]
-            if pd.notna(a_hoy) and pd.notna(registro_previo.get('ayuno')):
-                d_ayuno = int(a_hoy - registro_previo.get('ayuno'))
-            if pd.notna(al_hoy) and pd.notna(registro_previo.get('almuerzo')):
-                d_almuerzo = int(al_hoy - registro_previo.get('almuerzo'))
-            if pd.notna(c_hoy) and pd.notna(registro_previo.get('cena')):
-                d_cena = int(c_hoy - registro_previo.get('cena'))
+    ayuno = pedir_float("Glisemia en ayuno (mg/dL): ")
+    almuerzo = pedir_float("Glisemia post-almuerzo (mg/dL): ")
+    cena = pedir_float("Glisemia post-cena (mg/dL): ")
 
-        # Desplegar tarjetas informativas nativas
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.metric(label=f"Ayuno ({f_actual})", value=f"{int(a_hoy)} mg/dL" if pd.notna(a_hoy) else "N/A", 
-                      delta=f"{d_ayuno} mg/dL vs ayer" if d_ayuno else None, delta_color="inverse")
-            if pd.notna(a_hoy):
-                if a_hoy >= 126: st.error("🚨 Alerta: Nivel Alto en Ayuno (Sugerencia Médica: >=126)")
-                elif a_hoy < 70: st.warning("⚠️ Alerta: Posible Hipoglucemia (<70)")
-                else: st.success("✅ Nivel Óptimo en Ayuno")
+    df = cargar_datos()
+    mismo_dia = df["fecha"] == fecha_dt
+    nueva_fila = {"fecha": fecha_dt, "ayuno": ayuno, "almuerzo": almuerzo, "cena": cena}
 
-        with m2:
-            st.metric(label="Almuerzo", value=f"{int(al_hoy)} mg/dL" if pd.notna(al_hoy) else "N/A", 
-                      delta=f"{d_almuerzo} mg/dL vs ayer" if d_almuerzo else None, delta_color="inverse")
-            if pd.notna(al_hoy):
-                if al_hoy >= 140: st.error("🚨 Alerta: Glucemia Postprandial Elevada (>=140)")
-                else: st.success("✅ Nivel Óptimo")
+    if mismo_dia.any():
+        console.print("[yellow]Ya existe un registro para esta fecha. Se actualizará.[/yellow]")
+        for k, v in nueva_fila.items():
+            if v is not None:
+                df.loc[mismo_dia, k] = v
+    else:
+        df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
 
-        with m3:
-            st.metric(label="Cena", value=f"{int(c_hoy)} mg/dL" if pd.notna(c_hoy) else "N/A", 
-                      delta=f"{d_cena} mg/dL vs ayer" if d_cena else None, delta_color="inverse")
-            if pd.notna(c_hoy):
-                if c_hoy >= 140: st.error("🚨 Alerta: Glucemia Postprandial Elevada (>=140)")
-                else: st.success("✅ Nivel Óptimo")
+    df = df.sort_values("fecha").reset_index(drop=True)
+    guardar_datos(df)
+    console.print("[bold green]Registro guardado correctamente.[/bold green]")
 
-    # 4. HISTORIAL Y GRÁFICAS INTERACTIVAS EN LA PARTE INFERIOR
-    st.markdown("### 📈 Histórico y Tendencias Cronológicas")
-    df_grafica = df_datos.set_index("fecha")
-    cols_validas = [c for c in ["ayuno", "almuerzo", "cena"] if c in df_grafica.columns]
-    if cols_validas:
-        st.line_chart(df_grafica[cols_validas])
-    
-    st.dataframe(df_datos[["fecha", "ayuno", "almuerzo", "cena", "notas"]], use_container_width=True)
-else:
-    st.info("Dashboard listo. Ingrese datos en el formulario superior para generar los gráficos y alertas automáticas.")
+
+def ver_historial():
+    df = cargar_datos()
+    if df.empty:
+        console.print("[yellow]Todavía no hay registros.[/yellow]")
+        return
+
+    table = Table(title="Historial de Glisemia", box=box.ROUNDED, header_style="bold cyan")
+    table.add_column("Fecha")
+    table.add_column("Ayuno", justify="right")
+    table.add_column("Almuerzo", justify="right")
+    table.add_column("Cena", justify="right")
+
+    for _, row in df.iterrows():
+        table.add_row(
+            row["fecha"].strftime("%Y-%m-%d") if pd.notna(row["fecha"]) else "-",
+            _fmt(row["ayuno"]),
+            _fmt(row["almuerzo"]),
+            _fmt(row["cena"]),
+        )
+    console.print(table)
+
+
+def _fmt(v):
+    return "-" if pd.isna(v) else f"{v:.0f}"
+
+
+# --------------------------------------------------------------------------
+# Comparativa y gráfico
+# --------------------------------------------------------------------------
+def ver_comparativa():
+    df = cargar_datos()
+    df = df.dropna(subset=["fecha"])
+    if len(df) == 0:
+        console.print("[yellow]No hay registros para comparar.[/yellow]")
+        return
+    if len(df) == 1:
+        console.print("[yellow]Solo hay un registro. Agrega otro día para ver la comparativa.[/yellow]")
+        _mostrar_estado_actual(df.iloc[-1])
+        return
+
+    actual = df.iloc[-1]
+    anterior = df.iloc[-2]
+
+    table = Table(
+        title=f"Comparativa: {anterior['fecha'].date()} → {actual['fecha'].date()}",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+    )
+    table.add_column("Métrica")
+    table.add_column("Anterior", justify="right")
+    table.add_column("Actual", justify="right")
+    table.add_column("Cambio", justify="right")
+    table.add_column("Estado", justify="center")
+
+    for col, etiqueta in [("ayuno", "Ayuno"), ("almuerzo", "Almuerzo"), ("cena", "Cena")]:
+        v_ant, v_act = anterior[col], actual[col]
+        cambio = "-"
+        if pd.notna(v_ant) and pd.notna(v_act):
+            delta = v_act - v_ant
+            flecha = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+            color = "red" if delta > 0 else ("green" if delta < 0 else "white")
+            cambio = f"[{color}]{flecha} {abs(delta):.0f}[/{color}]"
+        estado, color_estado = clasificar(v_act, col)
+        table.add_row(etiqueta, _fmt(v_ant), _fmt(v_act), cambio, f"[{color_estado}]{estado}[/{color_estado}]")
+
+    console.print(table)
+
+    # Promedios de los últimos 7 y 30 registros
+    _mostrar_promedios(df)
+
+    # Gráfico de tendencia
+    ruta_grafico = generar_grafico(df)
+    console.print(f"\n[bold cyan]Gráfico de tendencia guardado en:[/bold cyan] {ruta_grafico}")
+
+
+def _mostrar_estado_actual(fila):
+    table = Table(title=f"Estado del {fila['fecha'].date()}", box=box.ROUNDED, header_style="bold cyan")
+    table.add_column("Métrica")
+    table.add_column("Valor", justify="right")
+    table.add_column("Estado", justify="center")
+    for col, etiqueta in [("ayuno", "Ayuno"), ("almuerzo", "Almuerzo"), ("cena", "Cena")]:
+        estado, color = clasificar(fila[col], col)
+        table.add_row(etiqueta, _fmt(fila[col]), f"[{color}]{estado}[/{color}]")
+    console.print(table)
+
+
+def _mostrar_promedios(df):
+    for n in (7, 30):
+        subset = df.tail(n)
+        if len(subset) < 2:
+            continue
+        table = Table(title=f"Promedio últimos {len(subset)} registros", box=box.SIMPLE)
+        table.add_column("Ayuno", justify="center")
+        table.add_column("Almuerzo", justify="center")
+        table.add_column("Cena", justify="center")
+        table.add_row(
+            _fmt(subset["ayuno"].mean()),
+            _fmt(subset["almuerzo"].mean()),
+            _fmt(subset["cena"].mean()),
+        )
+        console.print(table)
+
+
+def generar_grafico(df, ultimos_n=30):
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    subset = df.tail(ultimos_n)
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(subset["fecha"], subset["ayuno"], marker="o", label="Ayuno", color="#2563eb")
+    plt.plot(subset["fecha"], subset["almuerzo"], marker="o", label="Almuerzo", color="#f59e0b")
+    plt.plot(subset["fecha"], subset["cena"], marker="o", label="Cena", color="#dc2626")
+
+    plt.axhspan(0, 99, color="#2563eb", alpha=0.05)
+    plt.title("Tendencia de Glisemia")
+    plt.xlabel("Fecha")
+    plt.ylabel("mg/dL")
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    ruta = os.path.join(REPORTS_DIR, "tendencia_glisemia.png")
+    plt.savefig(ruta, dpi=150)
+    plt.close()
+    return ruta
+
+
+# --------------------------------------------------------------------------
+# Google Drive
+# --------------------------------------------------------------------------
+def cargar_config():
+    if not os.path.exists(CONFIG_PATH):
+        console.print(
+            "[red]No se encontró config.json. Copia config.example.json a config.json "
+            "y completa drive_folder_id.[/red]"
+        )
+        return None
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def obtener_servicio_drive():
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+    except ImportError:
+        console.print(
+            "[red]Faltan dependencias de Google. Ejecuta: "
+            "pip install -r requirements.txt[/red]"
+        )
+        return None
+
+    if not os.path.exists(CREDENTIALS_PATH):
+        console.print(
+            f"[red]No se encontró {CREDENTIALS_PATH}. Sigue las instrucciones del "
+            "README para crear tu cuenta de servicio.[/red]"
+        )
+        return None
+
+    scopes = ["https://www.googleapis.com/auth/drive"]
+    creds = service_account.Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=scopes)
+    return build("drive", "v3", credentials=creds)
+
+
+def _buscar_archivo_drive(servicio, folder_id, nombre):
+    query = f"'{folder_id}' in parents and name = '{nombre}' and trashed = false"
+    resultado = servicio.files().list(q=query, fields="files(id, name)").execute()
+    archivos = resultado.get("files", [])
+    return archivos[0]["id"] if archivos else None
+
+
+def subir_a_drive():
+    config = cargar_config()
+    if not config:
+        return
+    servicio = obtener_servicio_drive()
+    if not servicio:
+        return
+
+    from googleapiclient.http import MediaFileUpload
+
+    folder_id = config["drive_folder_id"]
+    nombre_archivo = "glisemia.csv"
+    file_id = _buscar_archivo_drive(servicio, folder_id, nombre_archivo)
+    media = MediaFileUpload(CSV_PATH, mimetype="text/csv")
+
+    if file_id:
+        servicio.files().update(fileId=file_id, media_body=media).execute()
+        console.print("[bold green]Archivo actualizado en Google Drive.[/bold green]")
+    else:
+        metadata = {"name": nombre_archivo, "parents": [folder_id]}
+        servicio.files().create(body=metadata, media_body=media, fields="id").execute()
+        console.print("[bold green]Archivo subido a Google Drive.[/bold green]")
+
+
+def descargar_de_drive():
+    config = cargar_config()
+    if not config:
+        return
+    servicio = obtener_servicio_drive()
+    if not servicio:
+        return
+
+    import io
+    from googleapiclient.http import MediaIoBaseDownload
+
+    folder_id = config["drive_folder_id"]
+    nombre_archivo = "glisemia.csv"
+    file_id = _buscar_archivo_drive(servicio, folder_id, nombre_archivo)
+
+    if not file_id:
+        console.print("[yellow]No se encontró glisemia.csv en la carpeta de Drive.[/yellow]")
+        return
+
+    request = servicio.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+
+    asegurar_csv()
+    with open(CSV_PATH, "wb") as f:
+        f.write(fh.getvalue())
+    console.print("[bold green]Datos descargados desde Google Drive.[/bold green]")
+
+
+# --------------------------------------------------------------------------
+# Menú principal
+# --------------------------------------------------------------------------
+def menu():
+    opciones = {
+        "1": ("Agregar registro de hoy", agregar_registro),
+        "2": ("Ver historial completo", ver_historial),
+        "3": ("Ver comparativa y gráfico de tendencia", ver_comparativa),
+        "4": ("Subir datos a Google Drive", subir_a_drive),
+        "5": ("Descargar datos desde Google Drive", descargar_de_drive),
+        "6": ("Salir", None),
+    }
+
+    while True:
+        console.print(Panel.fit("🩸 Glisemia Tracker", style="bold magenta"))
+        for k, (texto, _) in opciones.items():
+            console.print(f"  [cyan]{k}[/cyan]. {texto}")
+        eleccion = console.input("\nElige una opción: ").strip()
+
+        if eleccion == "6":
+            console.print("[bold]Hasta la próxima. Cuida tu salud.[/bold]")
+            break
+        elif eleccion in opciones:
+            try:
+                opciones[eleccion][1]()
+            except Exception as e:
+                console.print(f"[red]Ocurrió un error: {e}[/red]")
+        else:
+            console.print("[red]Opción no válida.[/red]")
+        console.print()
+
+
+if __name__ == "__main__":
+    menu()
