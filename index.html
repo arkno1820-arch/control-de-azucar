@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <!-- PANTALLA DE BLOQUEO -->
+    <!-- ===== PANTALLA DE BLOQUEO ===== -->
     <div id="lockScreen" class="lock-screen">
         <div class="lock-container">
             <div class="lock-icon">🔒</div>
@@ -35,22 +35,23 @@
                 <button data-num="entrar" class="pin-action">✓</button>
             </div>
             <div id="pinError" class="pin-error"></div>
-            <div class="lock-footer">v2.0 - Datos en Google Drive</div>
+            <div class="lock-footer">v3.0 · Datos en la nube</div>
         </div>
     </div>
 
-    <!-- DASHBOARD PRINCIPAL -->
+    <!-- ===== DASHBOARD PRINCIPAL ===== -->
     <div id="mainApp" class="main-app hidden">
         <div class="dashboard">
+            <!-- HEADER -->
             <header class="header">
                 <div>
                     <h1>🩸 Glucemia <span>Pro</span></h1>
-                    <p class="subtitle">Control de 3 comidas · <span id="userEmail">cargando...</span></p>
+                    <p class="subtitle">Control de 3 comidas · <span id="userEmail">☁️ Nube</span></p>
                 </div>
                 <button id="btnCerrarSesion" class="btn-logout">🚪 Salir</button>
             </header>
 
-            <!-- Tarjetas de resumen -->
+            <!-- TARJETAS DE RESUMEN -->
             <div class="card-grid" id="resumenCards">
                 <div class="card card-ayuno">
                     <div class="card-label">🌅 Ayuno</div>
@@ -74,7 +75,7 @@
                 </div>
             </div>
 
-            <!-- Panel de registro -->
+            <!-- PANEL DE REGISTRO -->
             <div class="panel">
                 <h2>➕ Nueva medición</h2>
                 <div class="form-row">
@@ -97,7 +98,7 @@
                 </div>
             </div>
 
-            <!-- Gráfica -->
+            <!-- GRÁFICA -->
             <div class="panel">
                 <div class="filter-bar">
                     <label for="filtroComida">📊 Mostrar:</label>
@@ -114,7 +115,7 @@
                 </div>
             </div>
 
-            <!-- Tabla -->
+            <!-- TABLA DE HISTORIAL -->
             <div class="panel">
                 <div class="table-header">
                     <h2>📋 Historial</h2>
@@ -139,10 +140,10 @@
                 </div>
             </div>
 
-            <!-- Estado de sincronización -->
+            <!-- ESTADO DE SINCRONIZACIÓN -->
             <div class="sync-status" id="syncStatus">
                 <span id="syncIndicator">🟢</span>
-                <span id="syncText">Datos sincronizados</span>
+                <span id="syncText">Sincronizado</span>
             </div>
         </div>
     </div>
