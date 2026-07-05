@@ -19,7 +19,7 @@ st.title("🩸 Panel de Control de Glucemia Diaria")
 # Reemplaza 'ENLACE_EXCEL_CSV' con tu enlace real. Asegúrate de que el documento esté compartido como "Lector".
 # Reemplaza 'ENLACE_FORMULARIO_EMBED' con el enlace para rellenar tu Google Form.
 # -----------------------------------------------------------------------------
-ENLACE_EXCEL_CSV = "https://google.com"
+ENLACE_EXCEL_CSV = "https://docs.google.com/spreadsheets/d/1RctsYdty_QuhJac_rNurDEBtXoVFxVToXSXyxuT1tZ8/edit?usp=sharing"
 ENLACE_FORMULARIO_EMBED = "AQUI_PEGA_EL_ENLACE_DE_TU_GOOGLE_FORM"
 # -----------------------------------------------------------------------------
 
