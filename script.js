@@ -5,7 +5,7 @@
 // Para generar el hash de tu clave, usa: https://emn178.github.io/online-tools/sha256.html
 // Ejemplo: "1234" = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 const PIN_HASH = 'fce1eda2d2a507fea1c09ef0bb92500280534c3d9c35418b87cd41fb4239de93'; // ← Hash de "1234"
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3NJ2IUc6st68uuet0EbQgTUZOg1QgjGNoe4ph24eGfY2kSzKKVbqwIIW5Q-0f7Y47/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/library/d/1LnTHvf5Huq_A42D-2mwHb_GTrFb8cSMQYMaMfEswiyoIXN4umZorLKrj/1';
 const EMAIL_DESARROLLADOR = 'cesarandresmanriquezfigueroa@gmail.com';
 
 // ============================================================
