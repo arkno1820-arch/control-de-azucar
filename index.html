@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Glucemia Pro - Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- PANTALLA DE BLOQUEO -->
+    <div id="lockScreen" class="lock-screen">
+        <div class="lock-container">
+            <div class="lock-icon">🔒</div>
+            <h2>Acceso al Dashboard</h2>
+            <p>Ingresa tu PIN de 4 dígitos</p>
+            <div class="pin-display" id="pinDisplay">
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+            </div>
+            <div class="pin-pad" id="pinPad">
+                <button data-num="1">1</button>
+                <button data-num="2">2</button>
+                <button data-num="3">3</button>
+                <button data-num="4">4</button>
+                <button data-num="5">5</button>
+                <button data-num="6">6</button>
+                <button data-num="7">7</button>
+                <button data-num="8">8</button>
+                <button data-num="9">9</button>
+                <button data-num="borrar" class="pin-action">⌫</button>
+                <button data-num="0">0</button>
+                <button data-num="entrar" class="pin-action">✓</button>
+            </div>
+            <div id="pinError" class="pin-error"></div>
+            <div class="lock-footer">v2.0 - Datos en Google Drive</div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD PRINCIPAL -->
+    <div id="mainApp" class="main-app hidden">
+        <div class="dashboard">
+            <header class="header">
+                <div>
+                    <h1>🩸 Glucemia <span>Pro</span></h1>
+                    <p class="subtitle">Control de 3 comidas · <span id="userEmail">cargando...</span></p>
+                </div>
+                <button id="btnCerrarSesion" class="btn-logout">🚪 Salir</button>
+            </header>
+
+            <!-- Tarjetas de resumen -->
+            <div class="card-grid" id="resumenCards">
+                <div class="card card-ayuno">
+                    <div class="card-label">🌅 Ayuno</div>
+                    <div class="card-value" id="ultimoAyuno">--</div>
+                    <div class="card-sub" id="promAyuno">Promedio: --</div>
+                </div>
+                <div class="card card-almuerzo">
+                    <div class="card-label">🍽️ Almuerzo</div>
+                    <div class="card-value" id="ultimoAlmuerzo">--</div>
+                    <div class="card-sub" id="promAlmuerzo">Promedio: --</div>
+                </div>
+                <div class="card card-cena">
+                    <div class="card-label">🌙 Cena</div>
+                    <div class="card-value" id="ultimoCena">--</div>
+                    <div class="card-sub" id="promCena">Promedio: --</div>
+                </div>
+                <div class="card card-total">
+                    <div class="card-label">📊 Total</div>
+                    <div class="card-value" id="totalRegistros">0</div>
+                    <div class="card-sub">registros</div>
+                </div>
+            </div>
+
+            <!-- Panel de registro -->
+            <div class="panel">
+                <h2>➕ Nueva medición</h2>
+                <div class="form-row">
+                    <select id="comidaSelect">
+                        <option value="ayuno">🌅 Ayuno</option>
+                        <option value="almuerzo">🍽️ Almuerzo</option>
+                        <option value="cena">🌙 Cena</option>
+                    </select>
+                    <input type="number" id="nivelInput" placeholder="mg/dL" min="30" max="500" />
+                    <input type="date" id="fechaInput" />
+                    <button id="btnAgregar" class="btn-primary">Guardar</button>
+                </div>
+                <div class="quick-buttons">
+                    <span>⚡ Rápido:</span>
+                    <button class="btn-quick" data-fast="70">70</button>
+                    <button class="btn-quick" data-fast="95">95</button>
+                    <button class="btn-quick" data-fast="120">120</button>
+                    <button class="btn-quick" data-fast="150">150</button>
+                    <button class="btn-quick" data-fast="180">180</button>
+                </div>
+            </div>
+
+            <!-- Gráfica -->
+            <div class="panel">
+                <div class="filter-bar">
+                    <label for="filtroComida">📊 Mostrar:</label>
+                    <select id="filtroComida">
+                        <option value="todas">Todas las comidas</option>
+                        <option value="ayuno">🌅 Ayuno</option>
+                        <option value="almuerzo">🍽️ Almuerzo</option>
+                        <option value="cena">🌙 Cena</option>
+                    </select>
+                    <button id="btnSincronizar" class="btn-sync">🔄 Sincronizar</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="glucChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabla -->
+            <div class="panel">
+                <div class="table-header">
+                    <h2>📋 Historial</h2>
+                    <div class="table-actions">
+                        <button id="btnExportar" class="btn-secondary">📥 CSV</button>
+                        <button id="btnLimpiar" class="btn-danger">🗑️ Borrar</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Comida</th>
+                                <th>Nivel</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCuerpo"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Estado de sincronización -->
+            <div class="sync-status" id="syncStatus">
+                <span id="syncIndicator">🟢</span>
+                <span id="syncText">Datos sincronizados</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
