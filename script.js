@@ -3,7 +3,7 @@
 // ============================================================
 const PIN_CORRECTO = '1980'; // PIN de acceso para el usuario
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbycUutATeJhL8v1_OIZygV91SHCZy2DZrhVw7IfbS1rXlM_2PB92OEzEe4XNfaezIDj/exec'; // ← TU URL DE APPS SCRIPT
-const EMAIL_DESARROLLADOR = 'tu@email.com'; // ← TU EMAIL (los datos se guardan en TU Drive)
+const EMAIL_DESARROLLADOR = 'cesarandresmanriquezfigueroa@gmail.com'; // ← TU EMAIL (los datos se guardan en TU Drive)
 
 // ============================================================
 // ESTADO
