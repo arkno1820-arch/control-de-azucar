@@ -25,7 +25,6 @@ def clasificar(valor, columna):
     if pd.isna(valor) or valor is None or valor == 0:
         return "Sin registro"
     t = THRESHOLDS[columna]
-    # Lógica de evaluación corregida con los índices correspondientes
     if t["normal"][0] <= valor <= t["normal"][1]:
         return "Normal"
     if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
@@ -49,10 +48,10 @@ def cargar_datos_cloud() -> pd.DataFrame:
         servicio = obtener_servicio()
         spreadsheet_id = st.secrets["spreadsheet"]["id"]
         
-        # CORRECCIÓN: Usa el nombre exacto de tu pestaña 'glisemia_db'
+        # CORRECCIÓN: Apunta al nombre real de la pestaña en tu Google Sheets ('Hoja 1')
         resultado = servicio.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id, 
-            range="glisemia_db!A:D"
+            range="Hoja 1!A:D"
         ).execute()
         
         filas = resultado.get('values', [])
@@ -81,15 +80,15 @@ def guardar_datos_cloud(df_nuevo: pd.DataFrame):
         valores = [df_out.columns.tolist()] + df_out.values.tolist()
         cuerpo = {'values': valores}
         
-        # CORRECCIÓN: Limpia y actualiza apuntando a 'glisemia_db'
+        # CORRECCIÓN: Limpia y actualiza usando 'Hoja 1'
         servicio.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id, 
-            range="glisemia_db!A:D"
+            range="Hoja 1!A:D"
         ).execute()
         
         servicio.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id, 
-            range="glisemia_db!A1", 
+            range="Hoja 1!A1", 
             valueInputOption="USER_ENTERED", 
             body=cuerpo
         ).execute()
