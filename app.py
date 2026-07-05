@@ -4,7 +4,7 @@ from datetime import date
 from streamlit_gsheets import GSheetsConnection
 
 # --------------------------------------------------------------------------
-# 1. Configuración de la Página (Responsiva por defecto)
+# 1. Configuración de la Página
 # --------------------------------------------------------------------------
 st.set_page_config(
     page_title="Glisemia Tracker",
@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Umbrales médicos de referencia (mg/dL)
+# Umbrales médicos de referencia (mg/dL) con tuplas de (mínimo, máximo)
 THRESHOLDS = {
     "ayuno":    {"normal": (0, 99),   "prediabetes": (100, 125)},
     "almuerzo": {"normal": (0, 139),  "prediabetes": (140, 199)},
@@ -24,7 +24,7 @@ def clasificar(valor, columna):
     if pd.isna(valor) or valor is None or valor == 0:
         return "Sin registro"
     t = THRESHOLDS[columna]
-    # Clasificación corregida usando los límites mínimo [0] y máximo [1] de cada rango
+    # SOLUCIÓN CRÍTICA: Ahora sí evalúa correctamente el mínimo [0] y el máximo [1]
     if t["normal"][0] <= valor <= t["normal"][1]:
         return "Normal"
     if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
@@ -32,50 +32,56 @@ def clasificar(valor, columna):
     return "Alto"
 
 # --------------------------------------------------------------------------
-# 2. Conexión Directa con Google Sheets (Lectura y Escritura)
+# 2. Conexión con Google Sheets
 # --------------------------------------------------------------------------
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos_cloud() -> pd.DataFrame:
     try:
         url_excel = st.secrets["excel"]["url"]
-        df = conn.read(spreadsheet=url_excel, ttl="0d") # Evita caché obsoleta
+        df = conn.read(spreadsheet=url_excel, ttl="0d")
         
-        if df.empty:
-            df = pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
-        else:
+        if df.empty or df.columns.empty:
+            return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
+            
+        # Limpieza de nombres de columnas por si acaso
+        df.columns = df.columns.str.strip().str.lower()
+        
+        if "fecha" in df.columns:
             df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
             df = df.dropna(subset=["fecha"])
             df = df.sort_values("fecha").reset_index(drop=True)
         return df
     except Exception as e:
-        st.error(f"Error al conectar con Google Sheets: {e}")
+        st.error(f"Error al cargar desde Google Sheets: {e}")
         return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
 
 def guardar_datos_cloud(df_nuevo: pd.DataFrame):
     try:
         url_excel = st.secrets["excel"]["url"]
         df_out = df_nuevo.copy()
+        # Formatear la fecha a texto estándar YYYY-MM-DD para el Excel
         df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
         
-        conn.update(spreadsheet=url_excel, data=df_out)
-        st.cache_data.clear() # Limpia la memoria interna para actualizar la visualización
+        # Actualización forzada de la hoja completa
+        conn.update(spreadsheet=url_excel, data=df_out, clear=True)
+        st.cache_data.clear()
     except Exception as e:
-        st.error(f"Error crítico al guardar en la nube: {e}")
+        st.error(f"Error al escribir en Google Sheets: {e}")
 
-# Carga los datos al iniciar la página
+# Carga inicial
 df = cargar_datos_cloud()
 
 # --------------------------------------------------------------------------
-# 3. Interfaz Gráfica del Panel de Control
+# 3. Interfaz de Usuario
 # --------------------------------------------------------------------------
 st.title("🩸 Glisemia Tracker Cloud")
 st.markdown("Monitoreo inteligente de niveles de azúcar integrado con Google Drive.")
 
-# --- SECCIÓN A: COMPARATIVA Y TARJETAS DE MÉTRICAS ---
+# --- SECCIÓN A: MÉTRICAS ---
 st.subheader("📊 Estado Actual vs Registro Anterior")
 
-if len(df) >= 1:
+if not df.empty and len(df) >= 1:
     actual = df.iloc[-1]
     anterior = df.iloc[-2] if len(df) >= 2 else pd.Series({"ayuno": pd.NA, "almuerzo": pd.NA, "cena": pd.NA, "fecha": pd.NA})
     
@@ -83,13 +89,13 @@ if len(df) >= 1:
     metricas = [("Ayuno", "ayuno", col1), ("Post-Almuerzo", "almuerzo", col2), ("Post-Cena", "cena", col3)]
     
     for etiqueta, col_name, columna_web in metricas:
-        v_act = pd.to_numeric(actual[col_name], errors='coerce')
-        v_ant = pd.to_numeric(anterior[col_name], errors='coerce')
+        v_act = pd.to_numeric(actual[col_name], errors='coerce') if col_name in actual else pd.NA
+        v_ant = pd.to_numeric(anterior[col_name], errors='coerce') if col_name in anterior else pd.NA
         
         if pd.notna(v_act) and v_act > 0 and pd.notna(v_ant) and v_ant > 0:
             delta_val = v_act - v_ant
-            delta_str = f"{delta_val:+.0f} mg/dL vs anterior"
-            delta_color = "inverse" if delta_val > 0 else "normal" # Rojo si sube, verde si baja
+            delta_str = f"{delta_val:+.0f} mg/dL"
+            delta_color = "inverse" if delta_val > 0 else "normal"
         else:
             delta_str = "Sin registro previo"
             delta_color = "normal"
@@ -111,24 +117,21 @@ else:
 
 st.divider()
 
-# --- SECCIÓN B: GRÁFICO DE TENDENCIAS ---
-if len(df) > 0:
+# --- SECCIÓN B: GRÁFICO ---
+if not df.empty and len(df) > 0:
     st.subheader("📈 Gráfico de Tendencias")
-    
     df_grafico = df.copy()
     df_grafico["fecha"] = pd.to_datetime(df_grafico["fecha"])
     df_grafico = df_grafico.set_index("fecha")
-    df_grafico = df_grafico[["ayuno", "almuerzo", "cena"]].apply(pd.to_numeric, errors='coerce')
     
-    st.line_chart(
-        df_grafico, 
-        y=["ayuno", "almuerzo", "cena"],
-        color=["#2ca02c", "#ff7f0e", "#d62728"] # Verde, Naranja, Rojo
-    )
-    st.caption("Toca las líneas en el móvil o pasa el cursor en la PC para ver las métricas exactas.")
+    columnas_validas = [c for c in ["ayuno", "almuerzo", "cena"] if c in df_grafico.columns]
+    if columnas_validas:
+        df_grafico = df_grafico[columnas_validas].apply(pd.to_numeric, errors='coerce')
+        st.line_chart(df_grafico, color=["#2ca02c", "#ff7f0e", "#d62728"])
+        st.caption("Usa el zoom táctil en el móvil para inspeccionar los días.")
     st.divider()
 
-# --- SECCIÓN C: FORMULARIO DE INGRESO ---
+# --- SECCIÓN C: FORMULARIO ---
 st.subheader("📝 Agregar o Actualizar Registro")
 
 with st.form("formulario_glicemia", clear_on_submit=True):
@@ -148,21 +151,26 @@ if boton_guardar:
     almuerzo_val = almuerzo_in if almuerzo_in > 0 else pd.NA
     cena_val = cena_in if cena_in > 0 else pd.NA
     
-    mismo_dia = df["fecha"] == fecha_dt
-    nueva_fila = {"fecha": fecha_dt, "ayuno": ayuno_val, "almuerzo": almuerzo_val, "cena": cena_val}
+    # Crear nueva fila estructurada
+    nueva_fila = pd.DataFrame([{"fecha": fecha_dt, "ayuno": ayuno_val, "almuerzo": almuerzo_val, "cena": cena_val}])
     
-    if mismo_dia.any():
-        for k, v in nueva_fila.items():
-            if pd.notna(v): df.loc[mismo_dia, k] = v
-        st.toast("🔄 Actualizando registro del mismo día...", icon="ℹ️")
+    if not df.empty and "fecha" in df.columns:
+        mismo_dia = df["fecha"] == fecha_dt
+        if mismo_dia.any():
+            if pd.notna(ayuno_val): df.loc[mismo_dia, "ayuno"] = ayuno_val
+            if pd.notna(almuerzo_val): df.loc[mismo_dia, "almuerzo"] = almuerzo_val
+            if pd.notna(cena_val): df.loc[mismo_dia, "cena"] = cena_val
+            st.toast("🔄 Actualizando día existente...", icon="ℹ️")
+        else:
+            df = pd.concat([df, nueva_fila], ignore_index=True)
+            st.toast("✅ Añadiendo nuevo día...", icon="🎉")
     else:
-        df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
-        st.toast("✅ Creando nuevo registro diario...", icon="🎉")
-        
+        df = nueva_fila
+
     df = df.sort_values("fecha").reset_index(drop=True)
     
-    # Sincroniza directamente con la nube de Google
+    # Guardar en la nube
     guardar_datos_cloud(df)
     
-    st.success("☁️ ¡Guardado correctamente en tu Google Sheets!")
+    st.success("☁️ ¡Datos sincronizados con éxito en Google Sheets!")
     st.rerun()
