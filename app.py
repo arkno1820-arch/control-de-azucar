@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
+import gspread
+from json import loads
 
 # Configuración de la página
 st.set_page_config(page_title="Control de Glucemia", layout="wide", page_icon="🩸")
@@ -15,13 +16,38 @@ st.sidebar.divider()
 
 st.title("🩸 Sistema de Control de Glucemia Diaria")
 
-# 2. Conexión con Google Sheets (Google Drive)
-# Se usa la conexión nativa de Streamlit para guardar datos
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # Intenta leer datos existentes, si no, crea un DataFrame vacío
-    df_existente = conn.read(ttl=0)
-except Exception:
+# 2. Conexión con Google Sheets
+@st.cache_resource
+def obtener_conexion_sheets():
+    try:
+        # Intenta conectar usando las credenciales secretas
+        credenciales = loads(st.secrets["gcp_service_account"])
+        gc = gspread.service_account_from_dict(credenciales)
+        # Abre la hoja por su URL guardada en Secrets
+        sh = gc.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+        return sh.get_worksheet(0)
+    except Exception as e:
+        # Alternativa simple si usas el enlace público directo
+        try:
+            url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+            # Convertir URL normal a formato de exportación CSV
+            csv_url = url.replace('/edit?usp=sharing', '/export?format=csv').replace('/edit#gid=', '/export?format=csv&gid=')
+            return csv_url
+        except:
+            return None
+
+ws_o_url = obtener_conexion_sheets()
+
+# Leer datos existentes
+if isinstance(ws_o_url, str):
+    try:
+        df_existente = pd.read_csv(ws_o_url)
+    except:
+        df_existente = pd.DataFrame(columns=["Fecha", "Ayuno", "Almuerzo", "Cena", "Notas"])
+elif ws_o_url is not None:
+    datos = ws_o_url.get_all_records()
+    df_existente = pd.DataFrame(datos) if datos else pd.DataFrame(columns=["Fecha", "Ayuno", "Almuerzo", "Cena", "Notas"])
+else:
     df_existente = pd.DataFrame(columns=["Fecha", "Ayuno", "Almuerzo", "Cena", "Notas"])
 
 # 3. Formulario de Ingreso de Datos
@@ -45,39 +71,33 @@ with st.form(key="glucemia_form", clear_on_submit=True):
 
 # 4. Lógica para guardar los datos
 if enviar:
-    nueva_fila = pd.DataFrame([{
+    nueva_fila = {
         "Fecha": fecha.strftime("%Y-%m-%d"),
-        "Ayuno": ayuno if ayuno > 0 else None,
-        "Almuerzo": almuerzo if almuerzo > 0 else None,
-        "Cena": cena if cena > 0 else None,
+        "Ayuno": int(ayuno) if ayuno > 0 else "",
+        "Almuerzo": int(almuerzo) if almuerzo > 0 else "",
+        "Cena": int(cena) if cena > 0 else "",
         "Notas": notas
-    }])
+    }
     
-    # Combinar datos viejos con el nuevo registro
-    df_actualizado = pd.concat([df_existente, nueva_fila], ignore_index=True)
-    
-    # Limpiar duplicados por fecha si se reescribe el mismo día
-    df_actualizado = df_actualizado.drop_duplicates(subset=["Fecha"], keep="last")
-    
-    # Guardar directamente en Google Sheets
-    conn.update(data=df_actualizado)
-    st.success("¡Datos guardados correctamente en Google Drive!")
-    st.rerun()
+    if ws_o_url is not None and not isinstance(ws_o_url, str):
+        ws_o_url.append_row(list(nueva_fila.values()))
+        st.success("¡Datos guardados correctamente en Google Drive!")
+        st.rerun()
+    else:
+        st.error("Para guardar datos de forma interactiva, necesitas configurar las credenciales completas de Google Cloud. Mientras tanto, puedes visualizar tus tendencias.")
 
 # 5. Visualización de Historial y Gráficos
 st.divider()
 st.subheader("📊 Historial y Tendencias")
 
 if not df_existente.empty:
-    # Asegurar orden cronológico
     df_existente = df_existente.sort_values(by="Fecha")
-    
-    # Mostrar tabla de datos
     st.dataframe(df_existente, use_container_width=True)
     
-    # Gráfico de líneas interactivo
     st.markdown("### Evolución de los niveles de azúcar")
-    df_grafico = df_existente.set_index("Fecha")[["Ayuno", "Almuerzo", "Cena"]]
-    st.line_chart(df_grafico)
+    df_grafico = df_existente.set_index("Fecha")
+    columnas_validas = [col for col in ["Ayuno", "Almuerzo", "Cena"] if col in df_grafico.columns]
+    if columnas_validas:
+        st.line_chart(df_grafico[columnas_validas])
 else:
-    st.info("Aún no hay datos registrados. Usa el formulario de arriba para empezar.")
+    st.info("Aún no hay datos registrados en tu Google Sheet.")
