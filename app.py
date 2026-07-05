@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import requests
+import io
 
 # --------------------------------------------------------------------------
 # 1. Configuración de la Página
@@ -24,7 +25,7 @@ def clasificar(valor, columna):
     if pd.isna(valor) or valor is None or valor == 0:
         return "Sin registro"
     t = THRESHOLDS[columna]
-    # Lógica de evaluación numérica usando índices explícitos mínimos y máximos
+    # Lógica de evaluación numérica usando índices mínimos y máximos de la tupla
     if t["normal"][0] <= valor <= t["normal"][1]:
         return "Normal"
     if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
@@ -32,15 +33,21 @@ def clasificar(valor, columna):
     return "Alto"
 
 # --------------------------------------------------------------------------
-# 2. Conexión HTTP Ultra Rápida con Google Sheets (Lectura Directa)
+# 2. Conexión de Red Nativa con Google Sheets (Lectura y Escritura Directa)
 # --------------------------------------------------------------------------
 def cargar_datos_cloud() -> pd.DataFrame:
     try:
         spreadsheet_id = st.secrets["spreadsheet"]["id"]
-        # Descarga directa del archivo en formato CSV usando peticiones web de Python
         csv_url = f"https://google.com{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet=Hoja+1"
         
-        df = pd.read_csv(csv_url)
+        # SOLUCIÓN CRÍTICA: Se usa requests para descargar el archivo de forma segura y evitar el error Errno -2
+        respuesta = requests.get(csv_url, timeout=10)
+        
+        if respuesta.status_code != 200:
+            return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
+            
+        # Convierte el texto descargado en un DataFrame de Pandas
+        df = pd.read_csv(io.StringIO(respuesta.text))
         
         if df.empty or df.columns.empty:
             return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
@@ -63,24 +70,15 @@ def guardar_datos_cloud(df_nuevo: pd.DataFrame):
         df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
         df_out = df_out.fillna("")
         
-        # Estructuración de datos en formato JSON nativo para envío HTTP externo
         valores = [df_out.columns.tolist()] + df_out.values.tolist()
         
-        # Petición HTTP POST directa usando las credenciales del cliente oficial de Google
-        token_url = "https://googleapis.com"
-        token_data = {
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": st.secrets["gcp_service_account"]["private_key"]
-        }
-        
-        # El proceso de envío se realiza de forma silenciosa en el backend
         url_api = f"https://googleapis.com{spreadsheet_id}/values/Hoja+1!A1?valueInputOption=USER_ENTERED"
         headers = {"Authorization": f"Bearer {st.secrets['gcp_service_account'].get('project_id')}"}
         
-        requests.put(url_api, json={"values": valores}, headers=headers)
+        requests.put(url_api, json={"values": valores}, headers=headers, timeout=10)
         st.cache_data.clear()
     except Exception as e:
-        st.sidebar.error(f"Aviso de guardado: Los datos se actualizaron en la interfaz. Verifique la persistencia remota.")
+        st.sidebar.error(f"Aviso de guardado: Verifique la persistencia remota.")
 
 # Carga inicial
 df = cargar_datos_cloud()
