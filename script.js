@@ -3,9 +3,9 @@
 // ============================================================
 // La clave de acceso se genera con hash SHA-256
 // Para generar el hash de tu clave, usa: https://emn178.github.io/online-tools/sha256.html
-// Ejemplo: "1234" = "key"
+// Ejemplo: "1234" = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 const PIN_HASH = 'fce1eda2d2a507fea1c09ef0bb92500280534c3d9c35418b87cd41fb4239de93'; // ← Hash de "1234"
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzHi3HU3i0luZLTf076VZRA-FplKxLECqyqOx7R9KIvTh5oxxl0rMkxT2sqSmvJNhYg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3NJ2IUc6st68uuet0EbQgTUZOg1QgjGNoe4ph24eGfY2kSzKKVbqwIIW5Q-0f7Y47/exec';
 const EMAIL_DESARROLLADOR = 'cesarandresmanriquezfigueroa@gmail.com';
 
 // ============================================================
@@ -145,7 +145,7 @@ function getComidaTag(comida) {
 }
 
 // ============================================================
-// GOOGLE DRIVE - OPERACIONES
+// GOOGLE DRIVE - OPERACIONES CON MANEJO DE ERRORES
 // ============================================================
 function mostrarMensaje(texto, tipo = 'info') {
     const existing = document.querySelector('.toast-message');
@@ -199,18 +199,32 @@ async function guardarEnDrive(datos) {
             datos: datos
         };
 
+        console.log('📤 Enviando a Drive:', payload);
+
         const response = await fetch(SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const text = await response.text();
-        const data = JSON.parse(text);
+        console.log('📥 Respuesta:', text);
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error('Error al parsear:', e);
+            throw new Error('Respuesta inválida del servidor');
+        }
 
         if (data.success) {
             syncIndicator.textContent = '✅';
-            syncText.textContent = `Guardado en Drive (${data.registros || datos.length} registros)`;
+            syncText.textContent = `Guardado (${data.registros || datos.length} registros)`;
             mostrarMensaje(`✅ ${data.registros || datos.length} registros guardados`, 'success');
             return true;
         } else {
@@ -240,6 +254,8 @@ async function cargarDeDrive() {
         mostrarMensaje('📥 Cargando datos de Drive...', 'info');
 
         const url = `${SCRIPT_URL}?action=cargar&email=${encodeURIComponent(EMAIL_DESARROLLADOR)}&t=${Date.now()}`;
+        console.log('🌐 URL:', url);
+        
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -247,7 +263,15 @@ async function cargarDeDrive() {
         }
 
         const text = await response.text();
-        const data = JSON.parse(text);
+        console.log('📥 Respuesta:', text);
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error('Error al parsear:', e);
+            throw new Error('Respuesta inválida del servidor');
+        }
 
         if (data.success) {
             if (data.datos && Array.isArray(data.datos)) {
@@ -276,6 +300,14 @@ async function cargarDeDrive() {
         syncIndicator.textContent = '🔴';
         syncText.textContent = 'Error de conexión';
         mostrarMensaje('❌ Error: ' + error.message, 'error');
+        
+        // Intentar con datos de respaldo (si existen)
+        if (registros.length > 0) {
+            mostrarMensaje('⚠️ Usando datos en caché', 'warning');
+            renderizar();
+            return true;
+        }
+        
         return false;
     } finally {
         cargando = false;
@@ -290,7 +322,7 @@ async function cargarDeDrive() {
 // RENDERIZADO
 // ============================================================
 function renderizar() {
-    if (!datosCargados) {
+    if (!datosCargados && registros.length === 0) {
         tablaCuerpo.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#6b7a8f;">⏳ Cargando datos...</td></tr>`;
         return;
     }
@@ -327,7 +359,6 @@ function renderizar() {
     totalRegistrosEl.textContent = registros.length;
 
     // ===== TABLA POR DÍA CON MÁXIMO =====
-    // Agrupar registros por día
     const registrosPorDia = {};
     registros.forEach(r => {
         const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
@@ -337,10 +368,8 @@ function renderizar() {
         registrosPorDia[fechaKey][r.comida] = r.nivel;
     });
 
-    // Ordenar días de más reciente a más antiguo
     const diasOrdenados = Object.keys(registrosPorDia).sort((a, b) => b.localeCompare(a));
 
-    // Construir tabla
     let html = '';
     diasOrdenados.forEach(dia => {
         const registrosDia = registrosPorDia[dia];
@@ -439,7 +468,7 @@ function actualizarGrafica(datos) {
 // AGREGAR REGISTRO
 // ============================================================
 async function agregarRegistro(nivel, fechaStr, comida) {
-    if (!datosCargados) {
+    if (!datosCargados && registros.length === 0) {
         mostrarMensaje('⏳ Espera a que carguen los datos', 'warning');
         return false;
     }
@@ -471,13 +500,15 @@ async function agregarRegistro(nivel, fechaStr, comida) {
         return true;
     } else {
         registros.shift();
-        mostrarMensaje('❌ Error al guardar', 'error');
+        mostrarMensaje('❌ Error al guardar en Drive', 'error');
+        // Aún así mostramos los datos en local
+        renderizar();
         return false;
     }
 }
 
 // ============================================================
-// EXPORTAR CSV - Formato por día y comidas (CORREGIDO)
+// EXPORTAR CSV - Formato corregido
 // ============================================================
 function exportarCSV() {
     if (!registros.length) {
@@ -485,7 +516,6 @@ function exportarCSV() {
         return;
     }
 
-    // Agrupar por día
     const registrosPorDia = {};
     registros.forEach(r => {
         const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
@@ -497,7 +527,6 @@ function exportarCSV() {
 
     const diasOrdenados = Object.keys(registrosPorDia).sort();
 
-    // Crear CSV con estructura por día - SIN comillas extras
     let csv = 'Fecha;Ayuno (mg/dL);Almuerzo (mg/dL);Cena (mg/dL);Máximo Diario\n';
     diasOrdenados.forEach(dia => {
         const r = registrosPorDia[dia];
@@ -507,12 +536,10 @@ function exportarCSV() {
         if (r.cena !== null) valores.push(r.cena);
         const maximo = valores.length > 0 ? Math.max(...valores) : '';
 
-        // Formatear fecha sin comillas
         const fechaFormateada = formatearFecha(dia);
         csv += `${fechaFormateada};${r.ayuno !== null ? r.ayuno : ''};${r.almuerzo !== null ? r.almuerzo : ''};${r.cena !== null ? r.cena : ''};${maximo}\n`;
     });
 
-    // Crear blob con UTF-8 BOM para compatibilidad con Excel
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -522,6 +549,81 @@ function exportarCSV() {
     URL.revokeObjectURL(url);
     mostrarMensaje('📥 CSV exportado correctamente', 'success');
 }
+
+// ============================================================
+// BORRAR TODOS LOS DATOS - CON CONFIRMACIÓN Y MANEJO DE ERRORES
+// ============================================================
+async function borrarTodosLosDatos() {
+    if (!registros.length) {
+        mostrarMensaje('📭 No hay datos para borrar', 'warning');
+        return;
+    }
+
+    // Confirmación con cuadro de diálogo personalizado
+    const confirmacion = confirm(
+        '⚠️ ¿ESTÁS SEGURO DE BORRAR TODOS LOS DATOS?\n\n' +
+        'Esta acción eliminará permanentemente:\n' +
+        `• ${registros.length} registros de glucosa\n` +
+        '• Todos los datos de las 3 comidas\n\n' +
+        '¡Esta acción NO SE PUEDE DESHACER!'
+    );
+
+    if (!confirmacion) {
+        mostrarMensaje('✅ Borrado cancelado', 'info');
+        return;
+    }
+
+    // Segunda confirmación para mayor seguridad
+    const confirmacionFinal = confirm(
+        '🔴 ÚLTIMA OPORTUNIDAD\n\n' +
+        '¿Realmente deseas eliminar TODOS los datos?\n' +
+        'Esta acción es irreversible.'
+    );
+
+    if (!confirmacionFinal) {
+        mostrarMensaje('✅ Borrado cancelado', 'info');
+        return;
+    }
+
+    try {
+        mostrarMensaje('🗑️ Eliminando todos los registros...', 'warning');
+        syncIndicator.textContent = '🔄';
+        syncText.textContent = 'Eliminando...';
+        btnLimpiar.disabled = true;
+
+        // Vaciar el array
+        registros = [];
+
+        // Intentar guardar en Drive (vacío)
+        const guardado = await guardarEnDrive(registros);
+
+        if (guardado) {
+            renderizar();
+            mostrarMensaje('🗑️ Todos los registros han sido eliminados', 'warning');
+            syncIndicator.textContent = '✅';
+            syncText.textContent = 'Datos eliminados';
+        } else {
+            // Si falla el guardado en Drive, igual mostramos los datos vacíos localmente
+            renderizar();
+            mostrarMensaje('⚠️ Datos eliminados localmente, pero hubo error al sincronizar con Drive', 'error');
+            syncIndicator.textContent = '⚠️';
+            syncText.textContent = 'Error al sincronizar';
+        }
+
+    } catch (error) {
+        console.error('❌ Error al borrar:', error);
+        mostrarMensaje('❌ Error al borrar: ' + error.message, 'error');
+        syncIndicator.textContent = '🔴';
+        syncText.textContent = 'Error al borrar';
+    } finally {
+        btnLimpiar.disabled = false;
+        setTimeout(() => {
+            syncIndicator.textContent = '🟢';
+            syncText.textContent = 'Sincronizado';
+        }, 3000);
+    }
+}
+
 // ============================================================
 // INICIALIZAR APP
 // ============================================================
@@ -561,17 +663,8 @@ async function inicializarApp() {
         await cargarDeDrive();
     });
 
-    btnLimpiar.addEventListener('click', async function() {
-        if (!registros.length) return;
-        if (confirm('⚠️ ¿Estás seguro de que quieres ELIMINAR TODOS los registros?\n\nEsta acción no se puede deshacer.')) {
-            registros = [];
-            const guardado = await guardarEnDrive(registros);
-            if (guardado) {
-                renderizar();
-                mostrarMensaje('🗑️ Todos los registros eliminados', 'warning');
-            }
-        }
-    });
+    // Botón de borrar con la nueva función mejorada
+    btnLimpiar.addEventListener('click', borrarTodosLosDatos);
 
     btnExportarCSV.addEventListener('click', exportarCSV);
 
@@ -596,3 +689,5 @@ async function inicializarApp() {
 // INICIO
 // ============================================================
 console.log('✅ App iniciada - esperando PIN');
+console.log('📧 Email:', EMAIL_DESARROLLADOR);
+console.log('🔗 Script URL:', SCRIPT_URL);
