@@ -15,6 +15,7 @@ st.set_page_config(
 )
 
 # Umbrales médicos de referencia (mg/dL) con tuplas de (mínimo, máximo)
+# Valores orientativos generales para adultos. No reemplazan indicación médica.
 THRESHOLDS = {
     "ayuno":    {"normal": (0, 99),   "prediabetes": (100, 125)},
     "almuerzo": {"normal": (0, 139),  "prediabetes": (140, 199)},
@@ -41,14 +42,20 @@ def obtener_servicio():
         info_claves, 
         scopes=['https://googleapis.com']
     )
-    return build('sheets', 'v4', credentials=credenciales)
+    # SOLUCIÓN AL ERROR 404: Se añade la URL de descubrimiento explícita para evitar rutas rotas
+    return build(
+        'sheets', 
+        'v4', 
+        credentials=credenciales,
+        discoveryServiceUrl="https://googleapis.com"
+    )
 
 def cargar_datos_cloud() -> pd.DataFrame:
     try:
         servicio = obtener_servicio()
         spreadsheet_id = st.secrets["spreadsheet"]["id"]
         
-        # CORRECCIÓN: Apunta al nombre real de la pestaña en tu Google Sheets ('Hoja 1')
+        # Conexión directa a la pestaña llamada 'Hoja 1'
         resultado = servicio.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id, 
             range="Hoja 1!A:D"
@@ -80,12 +87,13 @@ def guardar_datos_cloud(df_nuevo: pd.DataFrame):
         valores = [df_out.columns.tolist()] + df_out.values.tolist()
         cuerpo = {'values': valores}
         
-        # CORRECCIÓN: Limpia y actualiza usando 'Hoja 1'
+        # Limpieza previa del rango A:D
         servicio.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id, 
             range="Hoja 1!A:D"
         ).execute()
         
+        # Escritura remota de las nuevas celdas
         servicio.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id, 
             range="Hoja 1!A1", 
@@ -95,7 +103,7 @@ def guardar_datos_cloud(df_nuevo: pd.DataFrame):
     except Exception as e:
         st.error(f"Error al escribir en la planilla: {e}")
 
-# Carga inicial de datos
+# Carga inicial de datos desde la nube
 df = cargar_datos_cloud()
 
 # --------------------------------------------------------------------------
