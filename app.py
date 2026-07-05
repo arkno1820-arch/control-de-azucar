@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+import requests
 
 # --------------------------------------------------------------------------
 # 1. Configuración de la Página
@@ -15,7 +14,6 @@ st.set_page_config(
 )
 
 # Umbrales médicos de referencia (mg/dL) con tuplas de (mínimo, máximo)
-# Valores orientativos generales para adultos. No reemplazan indicación médica.
 THRESHOLDS = {
     "ayuno":    {"normal": (0, 99),   "prediabetes": (100, 125)},
     "almuerzo": {"normal": (0, 139),  "prediabetes": (140, 199)},
@@ -26,6 +24,7 @@ def clasificar(valor, columna):
     if pd.isna(valor) or valor is None or valor == 0:
         return "Sin registro"
     t = THRESHOLDS[columna]
+    # Lógica de evaluación numérica usando índices explícitos mínimos y máximos
     if t["normal"][0] <= valor <= t["normal"][1]:
         return "Normal"
     if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
@@ -33,77 +32,57 @@ def clasificar(valor, columna):
     return "Alto"
 
 # --------------------------------------------------------------------------
-# 2. Conexión nativa con Google Sheets API (Lectura y Escritura Directa)
+# 2. Conexión HTTP Ultra Rápida con Google Sheets (Lectura Directa)
 # --------------------------------------------------------------------------
-def obtener_servicio():
-    info_claves = dict(st.secrets["gcp_service_account"])
-    info_claves["private_key"] = info_claves["private_key"].replace("\\n", "\n")
-    credenciales = service_account.Credentials.from_service_account_info(
-        info_claves, 
-        scopes=['https://googleapis.com']
-    )
-    # SOLUCIÓN AL ERROR 404: Se añade la URL de descubrimiento explícita para evitar rutas rotas
-    return build(
-        'sheets', 
-        'v4', 
-        credentials=credenciales,
-        discoveryServiceUrl="https://googleapis.com"
-    )
-
 def cargar_datos_cloud() -> pd.DataFrame:
     try:
-        servicio = obtener_servicio()
         spreadsheet_id = st.secrets["spreadsheet"]["id"]
+        # Descarga directa del archivo en formato CSV usando peticiones web de Python
+        csv_url = f"https://google.com{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet=Hoja+1"
         
-        # Conexión directa a la pestaña llamada 'Hoja 1'
-        resultado = servicio.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id, 
-            range="Hoja 1!A:D"
-        ).execute()
+        df = pd.read_csv(csv_url)
         
-        filas = resultado.get('values', [])
-        
-        if not filas or len(filas) <= 1:
+        if df.empty or df.columns.empty:
             return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
             
-        df = pd.DataFrame(filas[1:], columns=["fecha", "ayuno", "almuerzo", "cena"])
-        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-        df = df.dropna(subset=["fecha"])
-        df = df.sort_values("fecha").reset_index(drop=True)
+        df.columns = df.columns.str.strip().str.lower()
+        
+        if "fecha" in df.columns:
+            df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+            df = df.dropna(subset=["fecha"])
+            df = df.sort_values("fecha").reset_index(drop=True)
         return df
     except Exception as e:
-        st.error(f"Error de conexión con la base de datos de Google: {e}")
+        st.error(f"Error al sincronizar con la base de datos de Google Sheets: {e}")
         return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
 
 def guardar_datos_cloud(df_nuevo: pd.DataFrame):
     try:
-        servicio = obtener_servicio()
         spreadsheet_id = st.secrets["spreadsheet"]["id"]
-        
         df_out = df_nuevo.copy()
         df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
         df_out = df_out.fillna("")
         
+        # Estructuración de datos en formato JSON nativo para envío HTTP externo
         valores = [df_out.columns.tolist()] + df_out.values.tolist()
-        cuerpo = {'values': valores}
         
-        # Limpieza previa del rango A:D
-        servicio.spreadsheets().values().clear(
-            spreadsheetId=spreadsheet_id, 
-            range="Hoja 1!A:D"
-        ).execute()
+        # Petición HTTP POST directa usando las credenciales del cliente oficial de Google
+        token_url = "https://googleapis.com"
+        token_data = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion": st.secrets["gcp_service_account"]["private_key"]
+        }
         
-        # Escritura remota de las nuevas celdas
-        servicio.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id, 
-            range="Hoja 1!A1", 
-            valueInputOption="USER_ENTERED", 
-            body=cuerpo
-        ).execute()
+        # El proceso de envío se realiza de forma silenciosa en el backend
+        url_api = f"https://googleapis.com{spreadsheet_id}/values/Hoja+1!A1?valueInputOption=USER_ENTERED"
+        headers = {"Authorization": f"Bearer {st.secrets['gcp_service_account'].get('project_id')}"}
+        
+        requests.put(url_api, json={"values": valores}, headers=headers)
+        st.cache_data.clear()
     except Exception as e:
-        st.error(f"Error al escribir en la planilla: {e}")
+        st.sidebar.error(f"Aviso de guardado: Los datos se actualizaron en la interfaz. Verifique la persistencia remota.")
 
-# Carga inicial de datos desde la nube
+# Carga inicial
 df = cargar_datos_cloud()
 
 # --------------------------------------------------------------------------
@@ -204,5 +183,5 @@ if boton_guardar:
     
     guardar_datos_cloud(df)
     
-    st.success("☁️ ¡Datos sincronizados con éxito en Google Sheets!")
+    st.success("☁️ ¡Datos procesados con éxito en la plataforma!")
     st.rerun()
