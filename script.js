@@ -1,8 +1,11 @@
 // ============================================================
 // CONFIGURACIÓN - CAMBIA ESTO SEGÚN TUS DATOS
 // ============================================================
-const PIN_CORRECTO = '1234';
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby2vclfUpmWr0L3Jo_EeSsC0p_q-QJmeDCmzWvYggIFjRkiU88LiTgSIqwm__zYaRqF/exec';
+// La clave de acceso se genera con hash SHA-256
+// Para generar el hash de tu clave, usa: https://emn178.github.io/online-tools/sha256.html
+// Ejemplo: "1234" = "key"
+const PIN_HASH = 'fce1eda2d2a507fea1c09ef0bb92500280534c3d9c35418b87cd41fb4239de93'; // ← Hash de "1234"
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzHi3HU3i0luZLTf076VZRA-FplKxLECqyqOx7R9KIvTh5oxxl0rMkxT2sqSmvJNhYg/exec';
 const EMAIL_DESARROLLADOR = 'cesarandresmanriquezfigueroa@gmail.com';
 
 // ============================================================
@@ -37,7 +40,6 @@ const btnAgregar = document.getElementById('btnAgregar');
 const tablaCuerpo = document.getElementById('tablaCuerpo');
 const btnLimpiar = document.getElementById('btnLimpiar');
 const btnExportarCSV = document.getElementById('btnExportarCSV');
-const btnDescargarJSON = document.getElementById('btnDescargarJSON');
 const filtroComida = document.getElementById('filtroComida');
 const btnSync = document.getElementById('btnSincronizar');
 const btnLogout = document.getElementById('btnCerrarSesion');
@@ -47,6 +49,17 @@ const userEmailEl = document.getElementById('userEmail');
 
 let chartInstance = null;
 const ctx = document.getElementById('glucChart').getContext('2d');
+
+// ============================================================
+// FUNCIÓN PARA GENERAR HASH SHA-256
+// ============================================================
+async function hashPin(pin) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pin);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // ============================================================
 // PIN LOGIC
@@ -62,8 +75,9 @@ function actualizarDisplayPin() {
     });
 }
 
-function verificarPin() {
-    if (pinIngresado === PIN_CORRECTO) {
+async function verificarPin() {
+    const hashIngresado = await hashPin(pinIngresado);
+    if (hashIngresado === PIN_HASH) {
         lockScreen.classList.add('hidden');
         mainApp.classList.remove('hidden');
         pinError.textContent = '';
@@ -71,7 +85,7 @@ function verificarPin() {
         actualizarDisplayPin();
         inicializarApp();
     } else if (pinIngresado.length === 4) {
-        pinError.textContent = '❌ PIN incorrecto. Intenta de nuevo.';
+        pinError.textContent = '❌ Clave incorrecta. Intenta de nuevo.';
         pinIngresado = '';
         actualizarDisplayPin();
         setTimeout(() => { pinError.textContent = ''; }, 2000);
@@ -82,19 +96,19 @@ pinPad.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
     const num = btn.dataset.num;
-    
+
     if (num === 'borrar') {
         pinIngresado = pinIngresado.slice(0, -1);
         actualizarDisplayPin();
         pinError.textContent = '';
         return;
     }
-    
+
     if (num === 'entrar') {
         verificarPin();
         return;
     }
-    
+
     if (pinIngresado.length < 4) {
         pinIngresado += num;
         actualizarDisplayPin();
@@ -136,14 +150,14 @@ function getComidaTag(comida) {
 function mostrarMensaje(texto, tipo = 'info') {
     const existing = document.querySelector('.toast-message');
     if (existing) existing.remove();
-    
+
     const toast = document.createElement('div');
     toast.className = 'toast-message';
     const colores = {
-        info: '#1a2a3a',
-        success: '#198754',
-        error: '#dc3545',
-        warning: '#ffc107'
+        info: '#1a1a2e',
+        success: '#00b894',
+        error: '#e53e3e',
+        warning: '#f6ad55'
     };
     toast.style.cssText = `
         position: fixed;
@@ -151,7 +165,7 @@ function mostrarMensaje(texto, tipo = 'info') {
         left: 50%;
         transform: translateX(-50%);
         background: ${colores[tipo] || colores.info};
-        color: ${tipo === 'warning' ? '#1a2a3a' : 'white'};
+        color: ${tipo === 'warning' ? '#1a1a2e' : 'white'};
         padding: 0.8rem 1.5rem;
         border-radius: 30px;
         font-size: 0.9rem;
@@ -161,10 +175,11 @@ function mostrarMensaje(texto, tipo = 'info') {
         text-align: center;
         animation: slideUp 0.3s ease-out;
         pointer-events: none;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
     `;
     toast.textContent = texto;
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transition = 'opacity 0.3s';
@@ -177,37 +192,43 @@ async function guardarEnDrive(datos) {
         syncIndicator.textContent = '🔄';
         syncText.textContent = 'Guardando...';
         btnAgregar.disabled = true;
-        
-        await fetch(SCRIPT_URL, {
+
+        const payload = {
+            action: 'guardar',
+            email: EMAIL_DESARROLLADOR,
+            datos: datos
+        };
+
+        const response = await fetch(SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'guardar',
-                email: EMAIL_DESARROLLADOR,
-                datos: datos
-            })
+            body: JSON.stringify(payload)
         });
-        
-        syncIndicator.textContent = '✅';
-        syncText.textContent = 'Guardado en Drive';
-        mostrarMensaje('✅ Datos guardados', 'success');
-        
+
+        const text = await response.text();
+        const data = JSON.parse(text);
+
+        if (data.success) {
+            syncIndicator.textContent = '✅';
+            syncText.textContent = `Guardado en Drive (${data.registros || datos.length} registros)`;
+            mostrarMensaje(`✅ ${data.registros || datos.length} registros guardados`, 'success');
+            return true;
+        } else {
+            throw new Error(data.error || 'Error al guardar');
+        }
+
+    } catch (error) {
+        console.error('❌ Error al guardar:', error);
+        syncIndicator.textContent = '🔴';
+        syncText.textContent = 'Error al guardar';
+        mostrarMensaje('❌ Error: ' + error.message, 'error');
+        return false;
+    } finally {
+        btnAgregar.disabled = false;
         setTimeout(() => {
             syncIndicator.textContent = '🟢';
             syncText.textContent = 'Sincronizado';
-        }, 2000);
-        
-        btnAgregar.disabled = false;
-        return true;
-        
-    } catch (error) {
-        console.error('Error al guardar:', error);
-        syncIndicator.textContent = '🔴';
-        syncText.textContent = 'Error al guardar';
-        mostrarMensaje('❌ Error al guardar', 'error');
-        btnAgregar.disabled = false;
-        return false;
+        }, 3000);
     }
 }
 
@@ -216,12 +237,18 @@ async function cargarDeDrive() {
         cargando = true;
         syncIndicator.textContent = '🔄';
         syncText.textContent = 'Cargando datos...';
-        mostrarMensaje('📥 Cargando datos...', 'info');
-        
+        mostrarMensaje('📥 Cargando datos de Drive...', 'info');
+
         const url = `${SCRIPT_URL}?action=cargar&email=${encodeURIComponent(EMAIL_DESARROLLADOR)}&t=${Date.now()}`;
         const response = await fetch(url);
-        const data = await response.json();
-        
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const text = await response.text();
+        const data = JSON.parse(text);
+
         if (data.success) {
             if (data.datos && Array.isArray(data.datos)) {
                 registros = data.datos;
@@ -229,11 +256,7 @@ async function cargarDeDrive() {
                 datosCargados = true;
                 syncIndicator.textContent = '✅';
                 syncText.textContent = `Cargados ${registros.length} registros`;
-                mostrarMensaje(`✅ Cargados ${registros.length} registros`, 'success');
-                setTimeout(() => {
-                    syncIndicator.textContent = '🟢';
-                    syncText.textContent = 'Sincronizado';
-                }, 2000);
+                mostrarMensaje(`✅ ${registros.length} registros cargados`, 'success');
                 renderizar();
                 return true;
             } else {
@@ -241,30 +264,25 @@ async function cargarDeDrive() {
                 datosCargados = true;
                 syncIndicator.textContent = '📭';
                 syncText.textContent = 'Sin datos previos';
-                mostrarMensaje('📭 Sin datos previos', 'warning');
-                setTimeout(() => {
-                    syncIndicator.textContent = '🟢';
-                    syncText.textContent = 'Listo';
-                }, 2000);
+                mostrarMensaje('📭 Sin datos previos en Drive', 'warning');
                 renderizar();
                 return true;
             }
         } else {
-            throw new Error(data.error || 'Error al cargar');
+            throw new Error(data.error || 'Error al cargar datos');
         }
     } catch (error) {
-        console.error('Error al cargar:', error);
+        console.error('❌ Error al cargar:', error);
         syncIndicator.textContent = '🔴';
         syncText.textContent = 'Error de conexión';
-        mostrarMensaje('❌ Error al cargar datos', 'error');
-        cargando = false;
-        btnAgregar.disabled = true;
-        setTimeout(() => {
-            btnAgregar.disabled = false;
-        }, 5000);
+        mostrarMensaje('❌ Error: ' + error.message, 'error');
         return false;
     } finally {
         cargando = false;
+        setTimeout(() => {
+            syncIndicator.textContent = '🟢';
+            syncText.textContent = 'Listo';
+        }, 3000);
     }
 }
 
@@ -276,10 +294,10 @@ function renderizar() {
         tablaCuerpo.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#6b7a8f;">⏳ Cargando datos...</td></tr>`;
         return;
     }
-    
+
     if (!registros.length) {
-        ['ultimoAyuno','ultimoAlmuerzo','ultimoCena'].forEach(id => document.getElementById(id).textContent = '--');
-        ['promAyuno','promAlmuerzo','promCena'].forEach(id => document.getElementById(id).textContent = 'Promedio: --');
+        ['ultimoAyuno', 'ultimoAlmuerzo', 'ultimoCena'].forEach(id => document.getElementById(id).textContent = '--');
+        ['promAyuno', 'promAlmuerzo', 'promCena'].forEach(id => document.getElementById(id).textContent = 'Promedio: --');
         totalRegistrosEl.textContent = '0';
         tablaCuerpo.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#6b7a8f;">📭 Sin registros. ¡Agrega tu primera medición!</td></tr>`;
         actualizarGrafica([]);
@@ -295,7 +313,7 @@ function renderizar() {
         } else {
             const ultimo = items[0];
             const niveles = items.map(r => r.nivel);
-            const promedio = niveles.reduce((s,n) => s+n, 0) / niveles.length;
+            const promedio = niveles.reduce((s, n) => s + n, 0) / niveles.length;
             stats[c] = { ultimo: ultimo.nivel, promedio: promedio };
         }
     });
@@ -308,33 +326,44 @@ function renderizar() {
     promCena.textContent = stats.cena.promedio !== null ? `Promedio: ${stats.cena.promedio.toFixed(0)}` : 'Promedio: --';
     totalRegistrosEl.textContent = registros.length;
 
-    // Tabla
-    const mostrar = registros.slice(0, 15);
-    tablaCuerpo.innerHTML = mostrar.map((r, idx) => {
-        const est = obtenerEstado(r.nivel);
-        return `<tr>
-            <td>${formatearFecha(r.fecha)}</td>
-            <td>${getComidaTag(r.comida)}</td>
-            <td><strong>${r.nivel}</strong></td>
-            <td><span class="status-badge ${est.clase}">${est.texto}</span></td>
-            <td><button class="accion-boton" data-idx="${idx}">✕</button></td>
-        </tr>`;
-    }).join('');
-
-    document.querySelectorAll('.accion-boton').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const idx = parseInt(this.dataset.idx, 10);
-            if (!isNaN(idx) && idx < registros.length) {
-                if (confirm(`¿Eliminar registro de ${registros[idx].nivel} mg/dL?`)) {
-                    registros.splice(idx, 1);
-                    await guardarEnDrive(registros);
-                    renderizar();
-                }
-            }
-        });
+    // ===== TABLA POR DÍA CON MÁXIMO =====
+    // Agrupar registros por día
+    const registrosPorDia = {};
+    registros.forEach(r => {
+        const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
+        if (!registrosPorDia[fechaKey]) {
+            registrosPorDia[fechaKey] = { ayuno: null, almuerzo: null, cena: null };
+        }
+        registrosPorDia[fechaKey][r.comida] = r.nivel;
     });
 
-    // Gráfica
+    // Ordenar días de más reciente a más antiguo
+    const diasOrdenados = Object.keys(registrosPorDia).sort((a, b) => b.localeCompare(a));
+
+    // Construir tabla
+    let html = '';
+    diasOrdenados.forEach(dia => {
+        const registrosDia = registrosPorDia[dia];
+        const valores = [];
+        if (registrosDia.ayuno !== null) valores.push(registrosDia.ayuno);
+        if (registrosDia.almuerzo !== null) valores.push(registrosDia.almuerzo);
+        if (registrosDia.cena !== null) valores.push(registrosDia.cena);
+        const maximo = valores.length > 0 ? Math.max(...valores) : null;
+
+        const fechaFormateada = formatearFecha(dia);
+
+        html += `<tr>
+            <td><strong>${fechaFormateada}</strong></td>
+            <td>${registrosDia.ayuno !== null ? `<span class="nivel-valor">${registrosDia.ayuno}</span> <span class="status-badge ${obtenerEstado(registrosDia.ayuno).clase}">${obtenerEstado(registrosDia.ayuno).texto}</span>` : '—'}</td>
+            <td>${registrosDia.almuerzo !== null ? `<span class="nivel-valor">${registrosDia.almuerzo}</span> <span class="status-badge ${obtenerEstado(registrosDia.almuerzo).clase}">${obtenerEstado(registrosDia.almuerzo).texto}</span>` : '—'}</td>
+            <td>${registrosDia.cena !== null ? `<span class="nivel-valor">${registrosDia.cena}</span> <span class="status-badge ${obtenerEstado(registrosDia.cena).clase}">${obtenerEstado(registrosDia.cena).texto}</span>` : '—'}</td>
+            <td>${maximo !== null ? `<span class="nivel-maximo">${maximo}</span>` : '—'}</td>
+        </tr>`;
+    });
+
+    tablaCuerpo.innerHTML = html;
+
+    // ===== GRÁFICA =====
     const filtro = filtroComida.value;
     let datosFiltrados = registros.slice(0, 14);
     if (filtro !== 'todas') {
@@ -363,9 +392,9 @@ function actualizarGrafica(datos) {
     }
 
     const colores = {
-        ayuno: { border: '#0d6efd', bg: 'rgba(13,110,253,0.1)' },
-        almuerzo: { border: '#198754', bg: 'rgba(25,135,84,0.1)' },
-        cena: { border: '#ffc107', bg: 'rgba(255,193,7,0.1)' }
+        ayuno: { border: '#6c5ce7', bg: 'rgba(108,92,231,0.1)' },
+        almuerzo: { border: '#00b894', bg: 'rgba(0,184,148,0.1)' },
+        cena: { border: '#fdcb6e', bg: 'rgba(253,203,110,0.1)' }
     };
 
     const comidas = ['ayuno', 'almuerzo', 'cena'];
@@ -380,7 +409,7 @@ function actualizarGrafica(datos) {
             data: items.map(r => r.nivel),
             borderColor: colores[comida].border,
             backgroundColor: colores[comida].bg,
-            tension: 0.25,
+            tension: 0.3,
             pointRadius: 4,
             pointBackgroundColor: colores[comida].border,
             fill: true,
@@ -395,11 +424,11 @@ function actualizarGrafica(datos) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } },
+                legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10, family: '-apple-system, sans-serif' } } },
                 tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} mg/dL` } }
             },
             scales: {
-                y: { beginAtZero: false, grid: { color: '#edf2f9' } },
+                y: { beginAtZero: false, grid: { color: '#edf2f7' } },
                 x: { grid: { display: false } }
             }
         }
@@ -414,16 +443,16 @@ async function agregarRegistro(nivel, fechaStr, comida) {
         mostrarMensaje('⏳ Espera a que carguen los datos', 'warning');
         return false;
     }
-    
+
     if (typeof nivel !== 'number' || isNaN(nivel) || nivel < 10 || nivel > 500) {
         mostrarMensaje('❌ Nivel válido: 10-500 mg/dL', 'error');
         return false;
     }
-    if (!['ayuno','almuerzo','cena'].includes(comida)) {
+    if (!['ayuno', 'almuerzo', 'cena'].includes(comida)) {
         mostrarMensaje('❌ Selecciona una comida', 'error');
         return false;
     }
-    
+
     let fecha = fechaStr || new Date().toISOString();
     const d = new Date(fecha);
     if (isNaN(d)) {
@@ -431,11 +460,11 @@ async function agregarRegistro(nivel, fechaStr, comida) {
         return false;
     }
     fecha = d.toISOString();
-    
+
     registros.unshift({ fecha, nivel, comida });
-    
+
     const guardado = await guardarEnDrive(registros);
-    
+
     if (guardado) {
         renderizar();
         mostrarMensaje('✅ Registro guardado', 'success');
@@ -448,56 +477,48 @@ async function agregarRegistro(nivel, fechaStr, comida) {
 }
 
 // ============================================================
-// EXPORTAR CSV
+// EXPORTAR CSV - Formato por día y comidas
 // ============================================================
 function exportarCSV() {
     if (!registros.length) {
         mostrarMensaje('📭 No hay datos para exportar', 'warning');
         return;
     }
-    let csv = 'Fecha,Comida,Nivel (mg/dL),Estado\n';
+
+    // Agrupar por día
+    const registrosPorDia = {};
     registros.forEach(r => {
-        const d = new Date(r.fecha);
-        const fecha = d.toLocaleDateString('es-ES');
-        const hora = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-        const estado = obtenerEstado(r.nivel).texto;
-        csv += `"${fecha} ${hora}","${r.comida}",${r.nivel},"${estado}"\n`;
+        const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
+        if (!registrosPorDia[fechaKey]) {
+            registrosPorDia[fechaKey] = { ayuno: null, almuerzo: null, cena: null };
+        }
+        registrosPorDia[fechaKey][r.comida] = r.nivel;
     });
+
+    const diasOrdenados = Object.keys(registrosPorDia).sort();
+
+    // Crear CSV con estructura por día
+    let csv = 'Fecha,Ayuno (mg/dL),Almuerzo (mg/dL),Cena (mg/dL),Máximo Diario\n';
+    diasOrdenados.forEach(dia => {
+        const r = registrosPorDia[dia];
+        const valores = [];
+        if (r.ayuno !== null) valores.push(r.ayuno);
+        if (r.almuerzo !== null) valores.push(r.almuerzo);
+        if (r.cena !== null) valores.push(r.cena);
+        const maximo = valores.length > 0 ? Math.max(...valores) : '';
+
+        const fechaFormateada = formatearFecha(dia);
+        csv += `"${fechaFormateada}",${r.ayuno !== null ? r.ayuno : ''},${r.almuerzo !== null ? r.almuerzo : ''},${r.cena !== null ? r.cena : ''},${maximo}\n`;
+    });
+
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `glucemia_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `glucemia_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    mostrarMensaje('📥 CSV exportado', 'success');
-}
-
-// ============================================================
-// DESCARGAR JSON (NUEVO)
-// ============================================================
-function descargarJSON() {
-    if (!registros.length) {
-        mostrarMensaje('📭 No hay datos para descargar', 'warning');
-        return;
-    }
-    
-    // Crear un objeto con metadatos
-    const dataCompleta = {
-        fechaExportacion: new Date().toISOString(),
-        totalRegistros: registros.length,
-        datos: registros
-    };
-    
-    const jsonStr = JSON.stringify(dataCompleta, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `glucemia_completa_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    mostrarMensaje('💾 JSON descargado', 'success');
+    mostrarMensaje('📥 CSV exportado correctamente', 'success');
 }
 
 // ============================================================
@@ -505,9 +526,9 @@ function descargarJSON() {
 // ============================================================
 async function inicializarApp() {
     userEmailEl.textContent = '☁️ Nube';
-    
+
     const cargado = await cargarDeDrive();
-    
+
     if (!cargado) {
         mostrarMensaje('❌ Error de conexión. Reintenta con "Sincronizar"', 'error');
         btnAgregar.disabled = true;
@@ -515,10 +536,10 @@ async function inicializarApp() {
             btnAgregar.disabled = false;
         }, 5000);
     }
-    
+
     const hoy = new Date();
-    fechaInput.value = hoy.toISOString().slice(0,10);
-    
+    fechaInput.value = hoy.toISOString().slice(0, 10);
+
     // ===== EVENTOS =====
     btnAgregar.addEventListener('click', async function() {
         const nivel = parseFloat(nivelInput.value);
@@ -529,29 +550,19 @@ async function inicializarApp() {
             nivelInput.value = '';
         }
     });
-    
+
     nivelInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnAgregar.click(); });
     fechaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnAgregar.click(); });
-    
-    document.querySelectorAll('.btn-quick').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const val = parseInt(this.dataset.fast, 10);
-            if (!isNaN(val)) {
-                nivelInput.value = val;
-                btnAgregar.click();
-            }
-        });
-    });
-    
+
     filtroComida.addEventListener('change', renderizar);
-    
+
     btnSync.addEventListener('click', async function() {
         await cargarDeDrive();
     });
-    
+
     btnLimpiar.addEventListener('click', async function() {
         if (!registros.length) return;
-        if (confirm('⚠️ ¿Eliminar TODOS los registros? Esta acción no se puede deshacer.')) {
+        if (confirm('⚠️ ¿Estás seguro de que quieres ELIMINAR TODOS los registros?\n\nEsta acción no se puede deshacer.')) {
             registros = [];
             const guardado = await guardarEnDrive(registros);
             if (guardado) {
@@ -560,10 +571,9 @@ async function inicializarApp() {
             }
         }
     });
-    
+
     btnExportarCSV.addEventListener('click', exportarCSV);
-    btnDescargarJSON.addEventListener('click', descargarJSON);
-    
+
     btnLogout.addEventListener('click', function() {
         if (confirm('¿Cerrar sesión?')) {
             lockScreen.classList.remove('hidden');
@@ -577,7 +587,7 @@ async function inicializarApp() {
             mostrarMensaje('👋 Sesión cerrada', 'info');
         }
     });
-    
+
     renderizar();
 }
 
