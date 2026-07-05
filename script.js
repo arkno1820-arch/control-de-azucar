@@ -121,7 +121,7 @@ pinPad.addEventListener('click', (e) => {
 // ============================================================
 function obtenerEstado(nivel) {
     if (nivel < 70) return { texto: 'Hipoglucemia', clase: 'status-bajo' };
-    if (nivel <= 140) return { texto: 'Normal', clase: 'status-normal' };
+    if (nivel <= 100) return { texto: 'Normal', clase: 'status-normal' };
     if (nivel <= 180) return { texto: 'Elevado', clase: 'status-alto' };
     return { texto: 'Alto riesgo', clase: 'status-peligro' };
 }
