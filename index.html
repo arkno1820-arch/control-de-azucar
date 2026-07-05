@@ -11,9 +11,9 @@
     <!-- ===== PANTALLA DE BLOQUEO ===== -->
     <div id="lockScreen" class="lock-screen">
         <div class="lock-container">
-            <div class="lock-icon">🔒</div>
+            <div class="lock-icon">🔐</div>
             <h2>Acceso al Dashboard</h2>
-            <p>Ingresa tu PIN de 4 dígitos</p>
+            <p>Ingresa tu clave de acceso</p>
             <div class="pin-display" id="pinDisplay">
                 <span class="pin-dot"></span>
                 <span class="pin-dot"></span>
@@ -88,14 +88,6 @@
                     <input type="date" id="fechaInput" />
                     <button id="btnAgregar" class="btn-primary">Guardar</button>
                 </div>
-                <div class="quick-buttons">
-                    <span>⚡ Rápido:</span>
-                    <button class="btn-quick" data-fast="70">70</button>
-                    <button class="btn-quick" data-fast="95">95</button>
-                    <button class="btn-quick" data-fast="120">120</button>
-                    <button class="btn-quick" data-fast="150">150</button>
-                    <button class="btn-quick" data-fast="180">180</button>
-                </div>
             </div>
 
             <!-- GRÁFICA -->
@@ -120,9 +112,8 @@
                 <div class="table-header">
                     <h2>📋 Historial</h2>
                     <div class="table-actions">
-                        <button id="btnExportarCSV" class="btn-secondary">📥 CSV</button>
-                        <button id="btnDescargarJSON" class="btn-secondary">💾 JSON</button>
-                        <button id="btnLimpiar" class="btn-danger">🗑️ Borrar</button>
+                        <button id="btnExportarCSV" class="btn-secondary">📥 Exportar CSV</button>
+                        <button id="btnLimpiar" class="btn-danger">🗑️ Borrar todo</button>
                     </div>
                 </div>
                 <div class="table-wrap">
@@ -130,16 +121,21 @@
                         <thead>
                             <tr>
                                 <th>Fecha</th>
-                                <th>Comida</th>
-                                <th>Nivel</th>
-                                <th>Estado</th>
-                                <th></th>
+                                <th>Ayuno</th>
+                                <th>Almuerzo</th>
+                                <th>Cena</th>
+                                <th>Máximo</th>
                             </tr>
                         </thead>
                         <tbody id="tablaCuerpo"></tbody>
                     </table>
                 </div>
             </div>
+
+            <!-- FOOTER -->
+            <footer class="footer">
+                <p>Desarrollado por <strong>César Manríquez</strong> · 2026</p>
+            </footer>
 
             <!-- ESTADO DE SINCRONIZACIÓN -->
             <div class="sync-status" id="syncStatus">
