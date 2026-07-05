@@ -296,6 +296,11 @@ body {
     background: #0b5ed7;
 }
 
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* ===== QUICK BUTTONS ===== */
 .quick-buttons {
     display: flex;
@@ -586,4 +591,10 @@ td {
 ::-webkit-scrollbar-thumb {
     background: #ccd7e6;
     border-radius: 10px;
+}
+
+/* ===== TOAST ANIMATION ===== */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(30px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
