@@ -2,7 +2,7 @@
 // CONFIGURACIÓN - CAMBIA ESTO SEGÚN TUS DATOS
 // ============================================================
 const PIN_CORRECTO = '1234';
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx89YxcgDPW1NRjjYLLf_XwyDLzDB-K_GpM-IMpWOhOaDwZUVCqOqRzKd_90u2orTpm/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby2vclfUpmWr0L3Jo_EeSsC0p_q-QJmeDCmzWvYggIFjRkiU88LiTgSIqwm__zYaRqF/exec';
 const EMAIL_DESARROLLADOR = 'cesarandresmanriquezfigueroa@gmail.com';
 
 // ============================================================
