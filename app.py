@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from streamlit_gsheets import GSheetsConnection
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 # --------------------------------------------------------------------------
 # 1. Configuración de la Página
@@ -24,7 +25,7 @@ def clasificar(valor, columna):
     if pd.isna(valor) or valor is None or valor == 0:
         return "Sin registro"
     t = THRESHOLDS[columna]
-    # SOLUCIÓN CRÍTICA: Ahora sí evalúa correctamente el mínimo [0] y el máximo [1]
+    # Lógica de evaluación corregida con los índices correspondientes
     if t["normal"][0] <= valor <= t["normal"][1]:
         return "Normal"
     if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
@@ -32,48 +33,74 @@ def clasificar(valor, columna):
     return "Alto"
 
 # --------------------------------------------------------------------------
-# 2. Conexión con Google Sheets
+# 2. Conexión nativa con Google Sheets API (Lectura y Escritura Directa)
 # --------------------------------------------------------------------------
-conn = st.connection("gsheets", type=GSheetsConnection)
+def obtener_servicio():
+    info_claves = dict(st.secrets["gcp_service_account"])
+    info_claves["private_key"] = info_claves["private_key"].replace("\\n", "\n")
+    credenciales = service_account.Credentials.from_service_account_info(
+        info_claves, 
+        scopes=['https://googleapis.com']
+    )
+    return build('sheets', 'v4', credentials=credenciales)
 
 def cargar_datos_cloud() -> pd.DataFrame:
     try:
-        url_excel = st.secrets["excel"]["url"]
-        df = conn.read(spreadsheet=url_excel, ttl="0d")
+        servicio = obtener_servicio()
+        spreadsheet_id = st.secrets["spreadsheet"]["id"]
         
-        if df.empty or df.columns.empty:
+        # CORRECCIÓN: Usa el nombre exacto de tu pestaña 'glisemia_db'
+        resultado = servicio.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id, 
+            range="glisemia_db!A:D"
+        ).execute()
+        
+        filas = resultado.get('values', [])
+        
+        if not filas or len(filas) <= 1:
             return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
             
-        # Limpieza de nombres de columnas por si acaso
-        df.columns = df.columns.str.strip().str.lower()
-        
-        if "fecha" in df.columns:
-            df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-            df = df.dropna(subset=["fecha"])
-            df = df.sort_values("fecha").reset_index(drop=True)
+        df = pd.DataFrame(filas[1:], columns=["fecha", "ayuno", "almuerzo", "cena"])
+        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+        df = df.dropna(subset=["fecha"])
+        df = df.sort_values("fecha").reset_index(drop=True)
         return df
     except Exception as e:
-        st.error(f"Error al cargar desde Google Sheets: {e}")
+        st.error(f"Error de conexión con la base de datos de Google: {e}")
         return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
 
 def guardar_datos_cloud(df_nuevo: pd.DataFrame):
     try:
-        url_excel = st.secrets["excel"]["url"]
-        df_out = df_nuevo.copy()
-        # Formatear la fecha a texto estándar YYYY-MM-DD para el Excel
-        df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
+        servicio = obtener_servicio()
+        spreadsheet_id = st.secrets["spreadsheet"]["id"]
         
-        # Actualización forzada de la hoja completa
-        conn.update(spreadsheet=url_excel, data=df_out, clear=True)
-        st.cache_data.clear()
+        df_out = df_nuevo.copy()
+        df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
+        df_out = df_out.fillna("")
+        
+        valores = [df_out.columns.tolist()] + df_out.values.tolist()
+        cuerpo = {'values': valores}
+        
+        # CORRECCIÓN: Limpia y actualiza apuntando a 'glisemia_db'
+        servicio.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id, 
+            range="glisemia_db!A:D"
+        ).execute()
+        
+        servicio.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id, 
+            range="glisemia_db!A1", 
+            valueInputOption="USER_ENTERED", 
+            body=cuerpo
+        ).execute()
     except Exception as e:
-        st.error(f"Error al escribir en Google Sheets: {e}")
+        st.error(f"Error al escribir en la planilla: {e}")
 
-# Carga inicial
+# Carga inicial de datos
 df = cargar_datos_cloud()
 
 # --------------------------------------------------------------------------
-# 3. Interfaz de Usuario
+# 3. Interfaz Gráfica del Panel de Control
 # --------------------------------------------------------------------------
 st.title("🩸 Glisemia Tracker Cloud")
 st.markdown("Monitoreo inteligente de niveles de azúcar integrado con Google Drive.")
@@ -151,7 +178,6 @@ if boton_guardar:
     almuerzo_val = almuerzo_in if almuerzo_in > 0 else pd.NA
     cena_val = cena_in if cena_in > 0 else pd.NA
     
-    # Crear nueva fila estructurada
     nueva_fila = pd.DataFrame([{"fecha": fecha_dt, "ayuno": ayuno_val, "almuerzo": almuerzo_val, "cena": cena_val}])
     
     if not df.empty and "fecha" in df.columns:
@@ -169,7 +195,6 @@ if boton_guardar:
 
     df = df.sort_values("fecha").reset_index(drop=True)
     
-    # Guardar en la nube
     guardar_datos_cloud(df)
     
     st.success("☁️ ¡Datos sincronizados con éxito en Google Sheets!")
