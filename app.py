@@ -25,7 +25,6 @@ def clasificar(valor, columna):
     if pd.isna(valor) or valor is None or valor == 0:
         return "Sin registro"
     t = THRESHOLDS[columna]
-    # Lógica de evaluación numérica usando índices mínimos y máximos de la tupla
     if t["normal"][0] <= valor <= t["normal"][1]:
         return "Normal"
     if t["prediabetes"][0] <= valor <= t["prediabetes"][1]:
@@ -33,20 +32,21 @@ def clasificar(valor, columna):
     return "Alto"
 
 # --------------------------------------------------------------------------
-# 2. Conexión de Red Nativa con Google Sheets (Lectura y Escritura Directa)
+# 2. Conexión de Red Nativa con Google Sheets
 # --------------------------------------------------------------------------
 def cargar_datos_cloud() -> pd.DataFrame:
     try:
-        spreadsheet_id = st.secrets["spreadsheet"]["id"]
+        # Extrae el ID limpio configurado en los Secrets
+        spreadsheet_id = st.secrets["spreadsheet"]["id"].strip()
+        
+        # Dirección web oficial y exacta estructurada por Python
         csv_url = f"https://google.com{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet=Hoja+1"
         
-        # SOLUCIÓN CRÍTICA: Se usa requests para descargar el archivo de forma segura y evitar el error Errno -2
-        respuesta = requests.get(csv_url, timeout=10)
+        respuesta = requests.get(csv_url, timeout=15)
         
         if respuesta.status_code != 200:
             return pd.DataFrame(columns=["fecha", "ayuno", "almuerzo", "cena"])
             
-        # Convierte el texto descargado en un DataFrame de Pandas
         df = pd.read_csv(io.StringIO(respuesta.text))
         
         if df.empty or df.columns.empty:
@@ -65,7 +65,7 @@ def cargar_datos_cloud() -> pd.DataFrame:
 
 def guardar_datos_cloud(df_nuevo: pd.DataFrame):
     try:
-        spreadsheet_id = st.secrets["spreadsheet"]["id"]
+        spreadsheet_id = st.secrets["spreadsheet"]["id"].strip()
         df_out = df_nuevo.copy()
         df_out["fecha"] = df_out["fecha"].dt.strftime("%Y-%m-%d")
         df_out = df_out.fillna("")
@@ -75,12 +75,12 @@ def guardar_datos_cloud(df_nuevo: pd.DataFrame):
         url_api = f"https://googleapis.com{spreadsheet_id}/values/Hoja+1!A1?valueInputOption=USER_ENTERED"
         headers = {"Authorization": f"Bearer {st.secrets['gcp_service_account'].get('project_id')}"}
         
-        requests.put(url_api, json={"values": valores}, headers=headers, timeout=10)
+        requests.put(url_api, json={"values": valores}, headers=headers, timeout=15)
         st.cache_data.clear()
     except Exception as e:
         st.sidebar.error(f"Aviso de guardado: Verifique la persistencia remota.")
 
-# Carga inicial
+# Carga inicial de datos
 df = cargar_datos_cloud()
 
 # --------------------------------------------------------------------------
