@@ -2,7 +2,7 @@
 // CONFIGURACIÓN - ACTUALIZADO CON URL FUNCIONAL
 // ============================================================
 const PIN_HASH = 'fce1eda2d2a507fea1c09ef0bb92500280534c3d9c35418b87cd41fb4239de93'; // Hash de "1234"
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaiLG3i67z21EvgxC8azKiJh9FKekwF0rHF2GR9mnAG_u9eFZeXijp7Jj4zGwKBx0L/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykmYcsQYqyJurfb5ccmDgayw_IkwjfWHjktRtdKZgK6I5iPZlrjZ3sg-cU49m9DM24/exec';
 const EMAIL_DESARROLLADOR = 'cesarandresmanriquezfigueroa@gmail.com';
 
 // ============================================================
