@@ -139,7 +139,7 @@ function obtenerEstado(nivel) {
 function formatearFecha(fechaStr) {
     const d = new Date(fechaStr);
     if (isNaN(d)) return fechaStr;
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 // ============================================================
