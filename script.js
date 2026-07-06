@@ -12,6 +12,7 @@ let registros = [];
 let pinIngresado = '';
 let datosCargados = false;
 let cargando = false;
+let medicamentos = [];
 
 // ============================================================
 // DOM REFS
@@ -43,6 +44,15 @@ const btnLogout = document.getElementById('btnCerrarSesion');
 const syncIndicator = document.getElementById('syncIndicator');
 const syncText = document.getElementById('syncText');
 const userEmailEl = document.getElementById('userEmail');
+
+const medNombreInput = document.getElementById('medNombreInput');
+const medDosisInput = document.getElementById('medDosisInput');
+const medHoraInput = document.getElementById('medHoraInput');
+const medFechaInput = document.getElementById('medFechaInput');
+const btnAgregarMed = document.getElementById('btnAgregarMed');
+const tablaMedCuerpo = document.getElementById('tablaMedCuerpo');
+const btnLimpiarMed = document.getElementById('btnLimpiarMed');
+const listaMedicamentos = document.getElementById('listaMedicamentos');
 
 let chartInstance = null;
 const ctx = document.getElementById('glucChart').getContext('2d');
@@ -580,6 +590,8 @@ async function inicializarApp() {
 
     const hoy = new Date();
     fechaInput.value = hoy.toISOString().slice(0, 10);
+    medFechaInput.value = hoy.toISOString().slice(0, 10);
+    await cargarMedsDeDrive();
 
     // ===== EVENTOS =====
     btnAgregar.addEventListener('click', async function() {
@@ -621,6 +633,129 @@ async function inicializarApp() {
 
     renderizar();
 }
+
+// ============================================================
+// MEDICAMENTOS
+// ============================================================
+async function guardarMedsEnDrive(datos) {
+    try {
+        const payload = { action: 'guardarMedicamentos', email: EMAIL_DESARROLLADOR, datos: datos };
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+        const data = JSON.parse(await response.text());
+        if (data.success) return true;
+        throw new Error(data.error || 'Error al guardar medicamentos');
+    } catch (error) {
+        console.error('❌ Error al guardar medicamentos:', error);
+        mostrarMensaje('❌ Error: ' + error.message, 'error');
+        return false;
+    }
+}
+
+async function cargarMedsDeDrive() {
+    try {
+        const url = `${SCRIPT_URL}?action=cargarMedicamentos&email=${encodeURIComponent(EMAIL_DESARROLLADOR)}&t=${Date.now()}`;
+        const response = await fetch(url);
+        const data = JSON.parse(await response.text());
+        if (data.success) {
+            medicamentos = Array.isArray(data.datos) ? data.datos : [];
+            medicamentos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            poblarDatalistConHistorial();
+            renderizarMedicamentos();
+            return true;
+        }
+        throw new Error(data.error || 'Error al cargar medicamentos');
+    } catch (error) {
+        console.error('❌ Error al cargar medicamentos:', error);
+        return false;
+    }
+}
+
+function poblarDatalistConHistorial() {
+    const existentes = new Set(
+        Array.from(listaMedicamentos.options).map(o => o.value.toLowerCase())
+    );
+    medicamentos.forEach(m => {
+        if (m.medicamento && !existentes.has(m.medicamento.toLowerCase())) {
+            const opt = document.createElement('option');
+            opt.value = m.medicamento;
+            listaMedicamentos.appendChild(opt);
+            existentes.add(m.medicamento.toLowerCase());
+        }
+    });
+}
+
+function renderizarMedicamentos() {
+    if (!medicamentos.length) {
+        tablaMedCuerpo.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#6b7a8f;">📭 Sin medicamentos registrados</td></tr>`;
+        return;
+    }
+    let html = '';
+    medicamentos.forEach(m => {
+        html += `<tr>
+            <td><strong>${formatearFecha(m.fecha)}</strong></td>
+            <td>${m.hora || '—'}</td>
+            <td>${m.medicamento}</td>
+            <td>${m.dosis || '—'}</td>
+        </tr>`;
+    });
+    tablaMedCuerpo.innerHTML = html;
+}
+
+async function agregarMedicamento(nombre, dosis, hora, fechaStr) {
+    if (!nombre || !nombre.trim()) {
+        mostrarMensaje('❌ Ingresa el nombre del medicamento', 'error');
+        return false;
+    }
+    let fecha = fechaStr ? new Date(fechaStr).toISOString() : new Date().toISOString();
+
+    medicamentos.unshift({ fecha, hora: hora || '', medicamento: nombre.trim(), dosis: dosis || '' });
+
+    const guardado = await guardarMedsEnDrive(medicamentos);
+    if (guardado) {
+        poblarDatalistConHistorial();
+        renderizarMedicamentos();
+        mostrarMensaje('✅ Medicamento guardado', 'success');
+        return true;
+    } else {
+        medicamentos.shift();
+        renderizarMedicamentos();
+        return false;
+    }
+}
+
+async function borrarTodosLosMedicamentos() {
+    if (!medicamentos.length) {
+        mostrarMensaje('📭 No hay medicamentos para borrar', 'warning');
+        return;
+    }
+    const confirmacion = confirm('⚠️ ¿Borrar todo el historial de medicamentos? Esta acción no se puede deshacer.');
+    if (!confirmacion) return;
+
+    medicamentos = [];
+    const guardado = await guardarMedsEnDrive(medicamentos);
+    renderizarMedicamentos();
+    mostrarMensaje(guardado ? '🗑️ Historial de medicamentos eliminado' : '⚠️ Error al sincronizar el borrado', guardado ? 'warning' : 'error');
+}
+
+btnAgregarMed.addEventListener('click', async function() {
+    const ok = await agregarMedicamento(
+        medNombreInput.value,
+        medDosisInput.value,
+        medHoraInput.value,
+        medFechaInput.value
+    );
+    if (ok) {
+        medNombreInput.value = '';
+        medDosisInput.value = '';
+        medHoraInput.value = '';
+    }
+});
+
+btnLimpiarMed.addEventListener('click', borrarTodosLosMedicamentos);
 
 // ============================================================
 // INICIO
