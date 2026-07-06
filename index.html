@@ -90,6 +90,65 @@
                 </div>
             </div>
 
+            <!-- PANEL DE MEDICAMENTOS -->
+            <div class="panel">
+                <h2>💊 Medicamentos</h2>
+                <div class="form-row">
+                    <input type="text" id="medNombreInput" list="listaMedicamentos" placeholder="Nombre del medicamento" autocomplete="off" />
+                    <input type="text" id="medDosisInput" placeholder="Dosis (ej: 500mg)" />
+                    <input type="time" id="medHoraInput" />
+                    <input type="date" id="medFechaInput" />
+                    <button id="btnAgregarMed" class="btn-primary">Guardar</button>
+                </div>
+                <datalist id="listaMedicamentos">
+                    <option value="Metformina"></option>
+                    <option value="Glibenclamida"></option>
+                    <option value="Gliclazida"></option>
+                    <option value="Glimepirida"></option>
+                    <option value="Insulina Glargina"></option>
+                    <option value="Insulina NPH"></option>
+                    <option value="Insulina Lispro"></option>
+                    <option value="Insulina Aspart"></option>
+                    <option value="Insulina Detemir"></option>
+                    <option value="Insulina Regular"></option>
+                    <option value="Sitagliptina"></option>
+                    <option value="Linagliptina"></option>
+                    <option value="Vildagliptina"></option>
+                    <option value="Empagliflozina"></option>
+                    <option value="Dapagliflozina"></option>
+                    <option value="Canagliflozina"></option>
+                    <option value="Pioglitazona"></option>
+                    <option value="Acarbosa"></option>
+                    <option value="Repaglinida"></option>
+                    <option value="Semaglutida"></option>
+                    <option value="Liraglutida"></option>
+                    <option value="Dulaglutida"></option>
+                </datalist>
+            </div>
+
+            <!-- HISTORIAL DE MEDICAMENTOS -->
+            <div class="panel">
+                <div class="table-header">
+                    <h2>📋 Historial de medicamentos</h2>
+                    <div class="table-actions">
+                        <button id="btnLimpiarMed" class="btn-danger">🗑️ Borrar todo</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th>Medicamento</th>
+                                <th>Dosis</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaMedCuerpo"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- GRÁFICA -->
             <div class="panel">
                 <div class="filter-bar">
