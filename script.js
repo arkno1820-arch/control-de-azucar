@@ -477,43 +477,72 @@ async function agregarRegistro(nivel, fechaStr, comida) {
 // EXPORTAR CSV
 // ============================================================
 function exportarCSV() {
-    if (!registros.length) {
+    if (!registros.length && !medicamentos.length) {
         mostrarMensaje('📭 No hay datos para exportar', 'warning');
         return;
     }
 
-    const registrosPorDia = {};
-    registros.forEach(r => {
-        const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
-        if (!registrosPorDia[fechaKey]) {
-            registrosPorDia[fechaKey] = { ayuno: null, almuerzo: null, cena: null };
-        }
-        registrosPorDia[fechaKey][r.comida] = r.nivel;
-    });
+    let csv = '';
 
-    const diasOrdenados = Object.keys(registrosPorDia).sort();
+    // ===== SECCIÓN GLUCEMIA =====
+    csv += 'GLUCEMIA\n';
+    csv += 'Fecha;Ayuno (mg/dL);Almuerzo (mg/dL);Cena (mg/dL);Máximo Diario\n';
 
-    let csv = 'Fecha;Ayuno (mg/dL);Almuerzo (mg/dL);Cena (mg/dL);Máximo Diario\n';
-    diasOrdenados.forEach(dia => {
-        const r = registrosPorDia[dia];
-        const valores = [];
-        if (r.ayuno !== null) valores.push(r.ayuno);
-        if (r.almuerzo !== null) valores.push(r.almuerzo);
-        if (r.cena !== null) valores.push(r.cena);
-        const maximo = valores.length > 0 ? Math.max(...valores) : '';
+    if (registros.length) {
+        const registrosPorDia = {};
+        registros.forEach(r => {
+            const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
+            if (!registrosPorDia[fechaKey]) {
+                registrosPorDia[fechaKey] = { ayuno: null, almuerzo: null, cena: null };
+            }
+            registrosPorDia[fechaKey][r.comida] = r.nivel;
+        });
 
-        const fechaFormateada = formatearFecha(dia);
-        csv += `${fechaFormateada};${r.ayuno !== null ? r.ayuno : ''};${r.almuerzo !== null ? r.almuerzo : ''};${r.cena !== null ? r.cena : ''};${maximo}\n`;
-    });
+        const diasOrdenados = Object.keys(registrosPorDia).sort();
+        diasOrdenados.forEach(dia => {
+            const r = registrosPorDia[dia];
+            const valores = [];
+            if (r.ayuno !== null) valores.push(r.ayuno);
+            if (r.almuerzo !== null) valores.push(r.almuerzo);
+            if (r.cena !== null) valores.push(r.cena);
+            const maximo = valores.length > 0 ? Math.max(...valores) : '';
+
+            const fechaFormateada = formatearFecha(dia);
+            csv += `${fechaFormateada};${r.ayuno !== null ? r.ayuno : ''};${r.almuerzo !== null ? r.almuerzo : ''};${r.cena !== null ? r.cena : ''};${maximo}\n`;
+        });
+    } else {
+        csv += 'Sin registros de glucemia\n';
+    }
+
+    csv += '\n';
+
+    // ===== SECCIÓN MEDICAMENTOS =====
+    csv += 'MEDICAMENTOS\n';
+    csv += 'Fecha;Hora;Medicamento;Dosis\n';
+
+    if (medicamentos.length) {
+        const medsOrdenados = [...medicamentos].sort((a, b) => {
+            const fa = new Date(a.fecha).toISOString().split('T')[0];
+            const fb = new Date(b.fecha).toISOString().split('T')[0];
+            if (fa !== fb) return fa.localeCompare(fb);
+            return (a.hora || '').localeCompare(b.hora || '');
+        });
+        medsOrdenados.forEach(m => {
+            const fechaFormateada = formatearFecha(m.fecha);
+            csv += `${fechaFormateada};${m.hora || ''};${m.medicamento || ''};${m.dosis || ''}\n`;
+        });
+    } else {
+        csv += 'Sin medicamentos registrados\n';
+    }
 
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `glucemia_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `control_azucar_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    mostrarMensaje('📥 CSV exportado correctamente', 'success');
+    mostrarMensaje('📥 CSV exportado (glucemia + medicamentos)', 'success');
 }
 
 // ============================================================
@@ -715,8 +744,8 @@ function renderizarMedicamentos() {
     diasOrdenados.forEach(dia => {
         const lista = porDia[dia];
         html += `<tr>
-            <td colspan="4" style="background:#f8f9fb; padding:0.9rem 0.6rem 0.5rem; border-top:2px solid #e2e8f0;">
-                <strong style="color:#1a1a2e;">📅 ${formatearFecha(dia)}</strong>
+            <td colspan="4" style="background:#fff1ee; padding:0.9rem 0.6rem 0.5rem; border-top:2px solid #f7c9c0;">
+                <strong style="color:#d63031;">📅 ${formatearFecha(dia)}</strong>
                 <span style="color:#6b7a8f; font-weight:normal; font-size:0.85em; margin-left:0.5rem;">${lista.length} ${lista.length === 1 ? 'medicamento' : 'medicamentos'}</span>
             </td>
         </tr>`;
