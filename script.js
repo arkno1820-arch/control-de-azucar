@@ -186,6 +186,19 @@ function mostrarMensaje(texto, tipo = 'info') {
     }, 3000);
 }
 
+// Keyframes helper for toast slide-up
+if (!document.getElementById('toastAnimationStyles')) {
+    const animStyles = document.createElement('style');
+    animStyles.id = 'toastAnimationStyles';
+    animStyles.innerText = `
+        @keyframes slideUp {
+            from { transform: translate(-50%, 20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(animStyles);
+}
+
 async function guardarEnDrive(datos) {
     try {
         syncIndicator.textContent = '🔄';
@@ -388,9 +401,9 @@ function actualizarGrafica(datos) {
     }
 
     const colores = {
-        ayuno: { border: '#6c5ce7', bg: 'rgba(108,92,231,0.1)' },
-        almuerzo: { border: '#00b894', bg: 'rgba(0,184,148,0.1)' },
-        cena: { border: '#fdcb6e', bg: 'rgba(253,203,110,0.1)' }
+        ayuno: { border: '#e53e3e', bg: 'rgba(229,62,62,0.06)' },      // Coral/Rojo ajustado
+        almuerzo: { border: '#dd6b20', bg: 'rgba(221,107,32,0.06)' },  // Naranja
+        cena: { border: '#319795', bg: 'rgba(49,151,149,0.06)' }        // Verde azulado
     };
 
     const comidas = ['ayuno', 'almuerzo', 'cena'];
@@ -424,7 +437,7 @@ function actualizarGrafica(datos) {
                 tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} mg/dL` } }
             },
             scales: {
-                y: { beginAtZero: false, grid: { color: '#edf2f7' } },
+                y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.05)' } },
                 x: { grid: { display: false } }
             }
         }
@@ -539,7 +552,7 @@ function exportarCSV() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `control_azucar_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `control_salud_y_glucemia_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     mostrarMensaje('📥 CSV exportado (glucemia + medicamentos)', 'success');
@@ -721,7 +734,7 @@ function poblarDatalistConHistorial() {
 
 function renderizarMedicamentos() {
     if (!medicamentos.length) {
-        tablaMedCuerpo.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#6b7a8f;">📭 Sin medicamentos registrados</td></tr>`;
+        tablaMedCuerpo.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#6b7a8f;padding:1.5rem;">📭 Sin medicamentos registrados</td></tr>`;
         return;
     }
 
@@ -744,34 +757,36 @@ function renderizarMedicamentos() {
     diasOrdenados.forEach(dia => {
         const lista = porDia[dia];
         html += `<tr>
-            <td colspan="4" style="background:#fff1ee; padding:0.9rem 0.6rem 0.5rem; border-top:2px solid #f7c9c0;">
-                <strong style="color:#d63031;">📅 ${formatearFecha(dia)}</strong>
-                <span style="color:#6b7a8f; font-weight:normal; font-size:0.85em; margin-left:0.5rem;">${lista.length} ${lista.length === 1 ? 'medicamento' : 'medicamentos'}</span>
+            <td colspan="4" style="background:rgba(108, 92, 231, 0.05); padding:0.9rem 0.6rem 0.5rem; border-top:2px solid rgba(108, 92, 231, 0.25);">
+                <strong style="color:#6c5ce7;">📅 ${formatearFecha(dia)}</strong>
+                <span style="color:#9ca3af; font-weight:normal; font-size:0.85em; margin-left:0.5rem;">${lista.length} ${lista.length === 1 ? 'medicamento' : 'medicamentos'}</span>
             </td>
         </tr>`;
         lista.forEach(m => {
             if (medEditandoId === m.id) {
                 const fechaValor = new Date(m.fecha).toISOString().slice(0, 10);
-                html += `<tr style="background:#fffbea;">
+                html += `<tr style="background:rgba(255, 255, 255, 0.02);">
                     <td colspan="4" style="padding:0.7rem 0.6rem;">
-                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
-                            <input type="date" id="editFecha-${m.id}" value="${fechaValor}" style="padding:0.4rem; border-radius:8px; border:1px solid #e2e8f0;" />
-                            <input type="time" id="editHora-${m.id}" value="${m.hora || ''}" style="padding:0.4rem; border-radius:8px; border:1px solid #e2e8f0;" />
-                            <input type="text" id="editNombre-${m.id}" value="${m.medicamento || ''}" list="listaMedicamentos" style="padding:0.4rem; flex:1; min-width:120px; border-radius:8px; border:1px solid #e2e8f0;" />
-                            <input type="text" id="editDosis-${m.id}" value="${m.dosis || ''}" placeholder="Dosis" style="padding:0.4rem; width:100px; border-radius:8px; border:1px solid #e2e8f0;" />
-                            <button class="btn-primary" style="padding:0.4rem 0.8rem;" onclick="guardarEdicionMedicamento('${m.id}')">✅ Guardar</button>
-                            <button class="btn-danger" style="padding:0.4rem 0.8rem;" onclick="cancelarEdicionMedicamento()">✖ Cancelar</button>
+                        <div class="edit-row-container">
+                            <input type="date" id="editFecha-${m.id}" value="${fechaValor}" />
+                            <input type="time" id="editHora-${m.id}" value="${m.hora || ''}" />
+                            <input type="text" id="editNombre-${m.id}" value="${m.medicamento || ''}" list="listaMedicamentos" />
+                            <input type="text" id="editDosis-${m.id}" value="${m.dosis || ''}" placeholder="Dosis" />
+                            <div class="edit-row-actions">
+                                <button class="btn-primary btn-save" onclick="guardarEdicionMedicamento('${m.id}')">Guardar</button>
+                                <button class="btn-danger btn-cancel" onclick="cancelarEdicionMedicamento()">Cancelar</button>
+                            </div>
                         </div>
                     </td>
                 </tr>`;
             } else {
                 html += `<tr>
                     <td>${m.hora || '—'}</td>
-                    <td>${m.medicamento}</td>
+                    <td style="font-weight:600; color:#c3c6d1;">${m.medicamento}</td>
                     <td>${m.dosis || '—'}</td>
                     <td>
-                        <button title="Editar" onclick="iniciarEdicionMedicamento('${m.id}')" style="background:none;border:none;cursor:pointer;font-size:1.05rem;">✏️</button>
-                        <button title="Eliminar" onclick="eliminarMedicamento('${m.id}')" style="background:none;border:none;cursor:pointer;font-size:1.05rem;">🗑️</button>
+                        <button title="Editar" class="action-btn" onclick="iniciarEdicionMedicamento('${m.id}')">✏️</button>
+                        <button title="Eliminar" class="action-btn" onclick="eliminarMedicamento('${m.id}')">🗑️</button>
                     </td>
                 </tr>`;
             }
@@ -781,15 +796,11 @@ function renderizarMedicamentos() {
     tablaMedCuerpo.innerHTML = html;
 }
 
-function iniciarEdicionMedicamento(id) {
-    medEditandoId = id;
-    renderizarMedicamentos();
-}
-
-function cancelarEdicionMedicamento() {
-    medEditandoId = null;
-    renderizarMedicamentos();
-}
+// Global scope bindings
+window.iniciarEdicionMedicamento = iniciarEdicionMedicamento;
+window.cancelarEdicionMedicamento = cancelarEdicionMedicamento;
+window.guardarEdicionMedicamento = guardarEdicionMedicamento;
+window.eliminarMedicamento = eliminarMedicamento;
 
 async function guardarEdicionMedicamento(id) {
     const registro = medicamentos.find(m => m.id === id);
