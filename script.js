@@ -690,18 +690,43 @@ function poblarDatalistConHistorial() {
 
 function renderizarMedicamentos() {
     if (!medicamentos.length) {
-        tablaMedCuerpo.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#6b7a8f;">📭 Sin medicamentos registrados</td></tr>`;
+        tablaMedCuerpo.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#6b7a8f;">📭 Sin medicamentos registrados</td></tr>`;
         return;
     }
-    let html = '';
+
+    // Agrupar por día (clave YYYY-MM-DD, consistente con el resto de la app)
+    const porDia = {};
     medicamentos.forEach(m => {
-        html += `<tr>
-            <td><strong>${formatearFecha(m.fecha)}</strong></td>
-            <td>${m.hora || '—'}</td>
-            <td>${m.medicamento}</td>
-            <td>${m.dosis || '—'}</td>
-        </tr>`;
+        const key = new Date(m.fecha).toISOString().split('T')[0];
+        if (!porDia[key]) porDia[key] = [];
+        porDia[key].push(m);
     });
+
+    // Dentro de cada día, ordenar por hora ascendente
+    Object.values(porDia).forEach(lista => {
+        lista.sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+    });
+
+    const diasOrdenados = Object.keys(porDia).sort((a, b) => b.localeCompare(a));
+
+    let html = '';
+    diasOrdenados.forEach(dia => {
+        const lista = porDia[dia];
+        html += `<tr>
+            <td colspan="3" style="background:#f8f9fb; padding:0.9rem 0.6rem 0.5rem; border-top:2px solid #e2e8f0;">
+                <strong style="color:#1a1a2e;">📅 ${formatearFecha(dia)}</strong>
+                <span style="color:#6b7a8f; font-weight:normal; font-size:0.85em; margin-left:0.5rem;">${lista.length} ${lista.length === 1 ? 'medicamento' : 'medicamentos'}</span>
+            </td>
+        </tr>`;
+        lista.forEach(m => {
+            html += `<tr>
+                <td>${m.hora || '—'}</td>
+                <td>${m.medicamento}</td>
+                <td>${m.dosis || '—'}</td>
+            </tr>`;
+        });
+    });
+
     tablaMedCuerpo.innerHTML = html;
 }
 
