@@ -265,6 +265,23 @@ body {
     margin-bottom: 1rem;
 }
 
+/* ===== MEDICAMENTOS - ACENTO DE COLOR DISTINTO A GLUCEMIA ===== */
+.panel-medicamentos {
+    border-left: 4px solid #e17055;
+}
+
+.panel-medicamentos h2 {
+    color: #d63031;
+}
+
+.btn-med {
+    background: linear-gradient(135deg, #e17055, #d63031);
+}
+
+.btn-med:hover {
+    box-shadow: 0 8px 25px rgba(214, 48, 49, 0.3);
+}
+
 /* ===== FORM ===== */
 .form-row {
     display: flex;
