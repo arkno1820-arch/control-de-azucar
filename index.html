@@ -46,7 +46,7 @@
             <header class="header">
                 <div>
                     <h1>🩸 Glucemia <span>Pro</span></h1>
-                    <p class="subtitle">Control de 3 comidas · <span id="userEmail">☁️ Nube</span></p>
+                    <p class="subtitle">Control de glucemia y medicamentos (incl. salud mental) · <span id="userEmail">☁️ Nube</span></p>
                 </div>
                 <button id="btnCerrarSesion" class="btn-logout">🚪 Salir</button>
             </header>
@@ -91,14 +91,14 @@
             </div>
 
             <!-- PANEL DE MEDICAMENTOS -->
-            <div class="panel">
+            <div class="panel panel-medicamentos">
                 <h2>💊 Medicamentos</h2>
                 <div class="form-row">
                     <input type="text" id="medNombreInput" list="listaMedicamentos" placeholder="Nombre del medicamento" autocomplete="off" />
                     <input type="text" id="medDosisInput" placeholder="Dosis (ej: 500mg)" />
                     <input type="time" id="medHoraInput" />
                     <input type="date" id="medFechaInput" />
-                    <button id="btnAgregarMed" class="btn-primary">Guardar</button>
+                    <button id="btnAgregarMed" class="btn-primary btn-med">Guardar</button>
                 </div>
                 <datalist id="listaMedicamentos">
                     <option value="Metformina"></option>
@@ -146,7 +146,7 @@
             </div>
 
             <!-- HISTORIAL DE MEDICAMENTOS -->
-            <div class="panel">
+            <div class="panel panel-medicamentos">
                 <div class="table-header">
                     <h2>📋 Historial de medicamentos</h2>
                     <div class="table-actions">
