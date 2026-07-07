@@ -13,6 +13,7 @@ let pinIngresado = '';
 let datosCargados = false;
 let cargando = false;
 let medicamentos = [];
+let medEditandoId = null;
 
 // ============================================================
 // DOM REFS
@@ -662,6 +663,7 @@ async function cargarMedsDeDrive() {
         const data = JSON.parse(await response.text());
         if (data.success) {
             medicamentos = Array.isArray(data.datos) ? data.datos : [];
+            medicamentos.forEach(m => { if (!m.id) m.id = crypto.randomUUID(); });
             medicamentos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
             poblarDatalistConHistorial();
             renderizarMedicamentos();
@@ -690,7 +692,7 @@ function poblarDatalistConHistorial() {
 
 function renderizarMedicamentos() {
     if (!medicamentos.length) {
-        tablaMedCuerpo.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#6b7a8f;">📭 Sin medicamentos registrados</td></tr>`;
+        tablaMedCuerpo.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#6b7a8f;">📭 Sin medicamentos registrados</td></tr>`;
         return;
     }
 
@@ -713,21 +715,104 @@ function renderizarMedicamentos() {
     diasOrdenados.forEach(dia => {
         const lista = porDia[dia];
         html += `<tr>
-            <td colspan="3" style="background:#f8f9fb; padding:0.9rem 0.6rem 0.5rem; border-top:2px solid #e2e8f0;">
+            <td colspan="4" style="background:#f8f9fb; padding:0.9rem 0.6rem 0.5rem; border-top:2px solid #e2e8f0;">
                 <strong style="color:#1a1a2e;">📅 ${formatearFecha(dia)}</strong>
                 <span style="color:#6b7a8f; font-weight:normal; font-size:0.85em; margin-left:0.5rem;">${lista.length} ${lista.length === 1 ? 'medicamento' : 'medicamentos'}</span>
             </td>
         </tr>`;
         lista.forEach(m => {
-            html += `<tr>
-                <td>${m.hora || '—'}</td>
-                <td>${m.medicamento}</td>
-                <td>${m.dosis || '—'}</td>
-            </tr>`;
+            if (medEditandoId === m.id) {
+                const fechaValor = new Date(m.fecha).toISOString().slice(0, 10);
+                html += `<tr style="background:#fffbea;">
+                    <td colspan="4" style="padding:0.7rem 0.6rem;">
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+                            <input type="date" id="editFecha-${m.id}" value="${fechaValor}" style="padding:0.4rem; border-radius:8px; border:1px solid #e2e8f0;" />
+                            <input type="time" id="editHora-${m.id}" value="${m.hora || ''}" style="padding:0.4rem; border-radius:8px; border:1px solid #e2e8f0;" />
+                            <input type="text" id="editNombre-${m.id}" value="${m.medicamento || ''}" list="listaMedicamentos" style="padding:0.4rem; flex:1; min-width:120px; border-radius:8px; border:1px solid #e2e8f0;" />
+                            <input type="text" id="editDosis-${m.id}" value="${m.dosis || ''}" placeholder="Dosis" style="padding:0.4rem; width:100px; border-radius:8px; border:1px solid #e2e8f0;" />
+                            <button class="btn-primary" style="padding:0.4rem 0.8rem;" onclick="guardarEdicionMedicamento('${m.id}')">✅ Guardar</button>
+                            <button class="btn-danger" style="padding:0.4rem 0.8rem;" onclick="cancelarEdicionMedicamento()">✖ Cancelar</button>
+                        </div>
+                    </td>
+                </tr>`;
+            } else {
+                html += `<tr>
+                    <td>${m.hora || '—'}</td>
+                    <td>${m.medicamento}</td>
+                    <td>${m.dosis || '—'}</td>
+                    <td>
+                        <button title="Editar" onclick="iniciarEdicionMedicamento('${m.id}')" style="background:none;border:none;cursor:pointer;font-size:1.05rem;">✏️</button>
+                        <button title="Eliminar" onclick="eliminarMedicamento('${m.id}')" style="background:none;border:none;cursor:pointer;font-size:1.05rem;">🗑️</button>
+                    </td>
+                </tr>`;
+            }
         });
     });
 
     tablaMedCuerpo.innerHTML = html;
+}
+
+function iniciarEdicionMedicamento(id) {
+    medEditandoId = id;
+    renderizarMedicamentos();
+}
+
+function cancelarEdicionMedicamento() {
+    medEditandoId = null;
+    renderizarMedicamentos();
+}
+
+async function guardarEdicionMedicamento(id) {
+    const registro = medicamentos.find(m => m.id === id);
+    if (!registro) return;
+
+    const nuevaFecha = document.getElementById(`editFecha-${id}`).value;
+    const nuevaHora = document.getElementById(`editHora-${id}`).value;
+    const nuevoNombre = document.getElementById(`editNombre-${id}`).value;
+    const nuevaDosis = document.getElementById(`editDosis-${id}`).value;
+
+    if (!nuevoNombre || !nuevoNombre.trim()) {
+        mostrarMensaje('❌ El nombre del medicamento no puede quedar vacío', 'error');
+        return;
+    }
+
+    const anterior = { ...registro };
+    registro.fecha = nuevaFecha ? new Date(nuevaFecha).toISOString() : registro.fecha;
+    registro.hora = nuevaHora || '';
+    registro.medicamento = nuevoNombre.trim();
+    registro.dosis = nuevaDosis || '';
+
+    const guardado = await guardarMedsEnDrive(medicamentos);
+    if (guardado) {
+        medEditandoId = null;
+        medicamentos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        poblarDatalistConHistorial();
+        renderizarMedicamentos();
+        mostrarMensaje('✅ Medicamento actualizado', 'success');
+    } else {
+        Object.assign(registro, anterior);
+        renderizarMedicamentos();
+    }
+}
+
+async function eliminarMedicamento(id) {
+    const registro = medicamentos.find(m => m.id === id);
+    if (!registro) return;
+
+    const confirmacion = confirm(`¿Eliminar "${registro.medicamento}" del ${formatearFecha(registro.fecha)}?`);
+    if (!confirmacion) return;
+
+    const respaldo = medicamentos.slice();
+    medicamentos = medicamentos.filter(m => m.id !== id);
+
+    const guardado = await guardarMedsEnDrive(medicamentos);
+    if (guardado) {
+        renderizarMedicamentos();
+        mostrarMensaje('🗑️ Medicamento eliminado', 'warning');
+    } else {
+        medicamentos = respaldo;
+        renderizarMedicamentos();
+    }
 }
 
 async function agregarMedicamento(nombre, dosis, hora, fechaStr) {
@@ -737,7 +822,7 @@ async function agregarMedicamento(nombre, dosis, hora, fechaStr) {
     }
     let fecha = fechaStr ? new Date(fechaStr).toISOString() : new Date().toISOString();
 
-    medicamentos.unshift({ fecha, hora: hora || '', medicamento: nombre.trim(), dosis: dosis || '' });
+    medicamentos.unshift({ id: crypto.randomUUID(), fecha, hora: hora || '', medicamento: nombre.trim(), dosis: dosis || '' });
 
     const guardado = await guardarMedsEnDrive(medicamentos);
     if (guardado) {
