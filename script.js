@@ -806,6 +806,16 @@ function renderizarMedicamentos() {
 }
 
 // Global scope bindings
+function iniciarEdicionMedicamento(id) {
+    medEditandoId = id;
+    renderizarMedicamentos();
+}
+
+function cancelarEdicionMedicamento() {
+    medEditandoId = null;
+    renderizarMedicamentos();
+}
+
 window.iniciarEdicionMedicamento = iniciarEdicionMedicamento;
 window.cancelarEdicionMedicamento = cancelarEdicionMedicamento;
 window.guardarEdicionMedicamento = guardarEdicionMedicamento;
