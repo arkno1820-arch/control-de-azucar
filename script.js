@@ -782,7 +782,7 @@ function renderizarMedicamentos() {
             } else {
                 html += `<tr>
                     <td>${m.hora || '—'}</td>
-                    <td style="font-weight:600; color:#c3c6d1;">${m.medicamento}</td>
+                    <td style="font-weight:600; color:#111827;">${m.medicamento}</td>
                     <td>${m.dosis || '—'}</td>
                     <td>
                         <button title="Editar" class="action-btn" onclick="iniciarEdicionMedicamento('${m.id}')">✏️</button>
