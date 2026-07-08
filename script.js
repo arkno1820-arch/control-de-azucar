@@ -92,6 +92,7 @@ async function verificarPin() {
         pinIngresado = '';
         actualizarDisplayPin();
         inicializarApp();
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
     } else if (pinIngresado.length === 4) {
         pinError.textContent = '❌ Clave incorrecta. Intenta de nuevo.';
         pinIngresado = '';
@@ -442,6 +443,14 @@ function actualizarGrafica(datos) {
             }
         }
     });
+
+    // Fix para iOS Safari: a veces el canvas calcula mal su ancho la
+    // primera vez que se dibuja. Forzamos un recálculo justo después.
+    setTimeout(() => {
+        if (chartInstance) {
+            chartInstance.resize();
+        }
+    }, 80);
 }
 
 // ============================================================
