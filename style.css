@@ -331,6 +331,12 @@ body {
     max-width: 100%;
 }
 
+.scope-glucemia,
+.scope-salud-mental {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
 /* Headers for scopes */
 .scope-header {
     display: flex;
@@ -738,6 +744,12 @@ body {
     height: 240px;
     position: relative;
     width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.chart-container canvas {
+    max-width: 100% !important;
 }
 
 /* ============================================================
