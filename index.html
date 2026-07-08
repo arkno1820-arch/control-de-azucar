@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Glucemia & Salud Mental Pro - Dashboard</title>
+    <title>Glucemia Pro - Dashboard</title>
     <link rel="stylesheet" href="style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -35,7 +35,7 @@
                 <button data-num="entrar" class="pin-action">✓</button>
             </div>
             <div id="pinError" class="pin-error"></div>
-            <div class="lock-footer">v4.0 · Glucemia & Salud Mental</div>
+            <div class="lock-footer">v3.0 · Datos en la nube</div>
         </div>
     </div>
 
@@ -45,188 +45,168 @@
             <!-- HEADER -->
             <header class="header">
                 <div>
-                    <h1>🩸 Glucemia & Salud Mental <span>Pro</span></h1>
-                    <p class="subtitle">Control integral metabólico y de bienestar emocional · <span id="userEmail">☁️ Nube</span></p>
+                    <h1>🩸 Glucemia <span>Pro</span></h1>
+                    <p class="subtitle">Control de glucemia y medicamentos (incl. salud mental) · <span id="userEmail">☁️ Nube</span></p>
                 </div>
-                <div class="header-actions">
-                    <button id="btnExportarCSV" class="btn-csv-top">📥 Exportar CSV</button>
-                    <button id="btnCerrarSesion" class="btn-logout">🚪 Salir</button>
-                </div>
+                <button id="btnCerrarSesion" class="btn-logout">🚪 Salir</button>
             </header>
 
-            <div class="sections-container">
-                <!-- ==================== ÁMBITO GLUCEMIA (ROJO / CORAL) ==================== -->
-                <div class="scope-glucemia">
-                    <div class="scope-header">
-                        <h2>📊 Ámbito Glucemia</h2>
-                        <span class="badge badge-red">Metabolismo</span>
-                    </div>
+            <!-- TARJETAS DE RESUMEN -->
+            <div class="card-grid" id="resumenCards">
+                <div class="card card-ayuno">
+                    <div class="card-label">🌅 Ayuno</div>
+                    <div class="card-value" id="ultimoAyuno">--</div>
+                    <div class="card-sub" id="promAyuno">Promedio: --</div>
+                </div>
+                <div class="card card-almuerzo">
+                    <div class="card-label">🍽️ Almuerzo</div>
+                    <div class="card-value" id="ultimoAlmuerzo">--</div>
+                    <div class="card-sub" id="promAlmuerzo">Promedio: --</div>
+                </div>
+                <div class="card card-cena">
+                    <div class="card-label">🌙 Cena</div>
+                    <div class="card-value" id="ultimoCena">--</div>
+                    <div class="card-sub" id="promCena">Promedio: --</div>
+                </div>
+                <div class="card card-total">
+                    <div class="card-label">📊 Total</div>
+                    <div class="card-value" id="totalRegistros">0</div>
+                    <div class="card-sub">registros</div>
+                </div>
+            </div>
 
-                    <!-- TARJETAS DE RESUMEN (REDUCIDAS) -->
-                    <div class="card-grid" id="resumenCards">
-                        <div class="card card-ayuno">
-                            <div class="card-label">🌅 Ayuno</div>
-                            <div class="card-value" id="ultimoAyuno">--</div>
-                            <div class="card-sub" id="promAyuno">Promedio: --</div>
-                        </div>
-                        <div class="card card-almuerzo">
-                            <div class="card-label">🍽️ Almuerzo</div>
-                            <div class="card-value" id="ultimoAlmuerzo">--</div>
-                            <div class="card-sub" id="promAlmuerzo">Promedio: --</div>
-                        </div>
-                        <div class="card card-cena">
-                            <div class="card-label">🌙 Cena</div>
-                            <div class="card-value" id="ultimoCena">--</div>
-                            <div class="card-sub" id="promCena">Promedio: --</div>
-                        </div>
-                        <div class="card card-total">
-                            <div class="card-label">📊 Total</div>
-                            <div class="card-value" id="totalRegistros">0</div>
-                            <div class="card-sub">registros</div>
-                        </div>
-                    </div>
+            <!-- PANEL DE REGISTRO -->
+            <div class="panel">
+                <h2>➕ Nueva medición</h2>
+                <div class="form-row">
+                    <select id="comidaSelect">
+                        <option value="ayuno">🌅 Ayuno</option>
+                        <option value="almuerzo">🍽️ Almuerzo</option>
+                        <option value="cena">🌙 Cena</option>
+                    </select>
+                    <input type="number" id="nivelInput" placeholder="mg/dL" min="30" max="500" />
+                    <input type="date" id="fechaInput" />
+                    <button id="btnAgregar" class="btn-primary">Guardar</button>
+                </div>
+            </div>
 
-                    <!-- PANEL DE REGISTRO -->
-                    <div class="panel">
-                        <h2>➕ Nueva medición</h2>
-                        <div class="form-row">
-                            <select id="comidaSelect">
-                                <option value="ayuno">🌅 Ayuno</option>
-                                <option value="almuerzo">🍽️ Almuerzo</option>
-                                <option value="cena">🌙 Cena</option>
-                            </select>
-                            <input type="number" id="nivelInput" placeholder="mg/dL" min="30" max="500" />
-                            <input type="date" id="fechaInput" />
-                            <button id="btnAgregar" class="btn-primary">Guardar</button>
-                        </div>
-                    </div>
+            <!-- PANEL DE MEDICAMENTOS -->
+            <div class="panel panel-medicamentos">
+                <h2>💊 Medicamentos</h2>
+                <div class="form-row">
+                    <input type="text" id="medNombreInput" list="listaMedicamentos" placeholder="Nombre del medicamento" autocomplete="off" />
+                    <input type="text" id="medDosisInput" placeholder="Dosis (ej: 500mg)" />
+                    <input type="time" id="medHoraInput" />
+                    <input type="date" id="medFechaInput" />
+                    <button id="btnAgregarMed" class="btn-primary btn-med">Guardar</button>
+                </div>
+                <datalist id="listaMedicamentos">
+                    <option value="Metformina"></option>
+                    <option value="Glibenclamida"></option>
+                    <option value="Gliclazida"></option>
+                    <option value="Glimepirida"></option>
+                    <option value="Insulina Glargina"></option>
+                    <option value="Insulina NPH"></option>
+                    <option value="Insulina Lispro"></option>
+                    <option value="Insulina Aspart"></option>
+                    <option value="Insulina Detemir"></option>
+                    <option value="Insulina Regular"></option>
+                    <option value="Sitagliptina"></option>
+                    <option value="Linagliptina"></option>
+                    <option value="Vildagliptina"></option>
+                    <option value="Empagliflozina"></option>
+                    <option value="Dapagliflozina"></option>
+                    <option value="Canagliflozina"></option>
+                    <option value="Pioglitazona"></option>
+                    <option value="Acarbosa"></option>
+                    <option value="Repaglinida"></option>
+                    <option value="Semaglutida"></option>
+                    <option value="Liraglutida"></option>
+                    <option value="Dulaglutida"></option>
+                    <option value="Escitalopram"></option>
+                    <option value="Sertralina"></option>
+                    <option value="Fluoxetina"></option>
+                    <option value="Paroxetina"></option>
+                    <option value="Venlafaxina"></option>
+                    <option value="Clonazepam"></option>
+                    <option value="Alprazolam"></option>
+                    <option value="Clotiazepam"></option>
+                    <option value="Quetiapina"></option>
+                    <option value="Olanzapina"></option>
+                    <option value="Risperidona"></option>
+                    <option value="Litio"></option>
+                    <option value="Ácido Valproico"></option>
+                    <option value="Bupropión"></option>
+                    <option value="Mirtazapina"></option>
+                    <option value="Omeprazol"></option>
+                    <option value="Losartán"></option>
+                    <option value="Enalapril"></option>
+                    <option value="Atorvastatina"></option>
+                </datalist>
+            </div>
 
-                    <!-- GRÁFICA -->
-                    <div class="panel">
-                        <div class="filter-bar">
-                            <label for="filtroComida">📊 Mostrar:</label>
-                            <select id="filtroComida">
-                                <option value="todas">Todas las comidas</option>
-                                <option value="ayuno">🌅 Ayuno</option>
-                                <option value="almuerzo">🍽️ Almuerzo</option>
-                                <option value="cena">🌙 Cena</option>
-                            </select>
-                            <button id="btnSincronizar" class="btn-sync">🔄 Sincronizar</button>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="glucChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- TABLA DE HISTORIAL -->
-                    <div class="panel">
-                        <div class="table-header">
-                            <h2>📋 Historial</h2>
-                            <div class="table-actions">
-                                <button id="btnLimpiar" class="btn-danger">🗑️ Borrar todo</button>
-                            </div>
-                        </div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Ayuno</th>
-                                        <th>Almuerzo</th>
-                                        <th>Cena</th>
-                                        <th>Máximo</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaCuerpo"></tbody>
-                            </table>
-                        </div>
+            <!-- HISTORIAL DE MEDICAMENTOS -->
+            <div class="panel panel-medicamentos">
+                <div class="table-header">
+                    <h2>📋 Historial de medicamentos</h2>
+                    <div class="table-actions">
+                        <button id="btnLimpiarMed" class="btn-danger">🗑️ Borrar todo</button>
                     </div>
                 </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Medicamento</th>
+                                <th>Dosis</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaMedCuerpo"></tbody>
+                    </table>
+                </div>
+            </div>
 
-                <!-- ==================== ÁMBITO SALUD MENTAL (VIOLETA / PURPURA) ==================== -->
-                <div class="scope-salud-mental">
-                    <div class="scope-header">
-                        <h2>🧠 Ámbito Salud Mental y Medicamentos</h2>
-                        <span class="badge badge-purple">Bienestar Emocional</span>
-                    </div>
+            <!-- GRÁFICA -->
+            <div class="panel">
+                <div class="filter-bar">
+                    <label for="filtroComida">📊 Mostrar:</label>
+                    <select id="filtroComida">
+                        <option value="todas">Todas las comidas</option>
+                        <option value="ayuno">🌅 Ayuno</option>
+                        <option value="almuerzo">🍽️ Almuerzo</option>
+                        <option value="cena">🌙 Cena</option>
+                    </select>
+                    <button id="btnSincronizar" class="btn-sync">🔄 Sincronizar</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="glucChart"></canvas>
+                </div>
+            </div>
 
-                    <!-- PANEL DE MEDICAMENTOS -->
-                    <div class="panel panel-medicamentos">
-                        <h2>💊 Registrar Medicamento</h2>
-                        <div class="form-row">
-                            <input type="text" id="medNombreInput" list="listaMedicamentos" placeholder="Nombre del medicamento" autocomplete="off" />
-                            <input type="text" id="medDosisInput" placeholder="Dosis (ej: 500mg)" />
-                            <input type="time" id="medHoraInput" />
-                            <input type="date" id="medFechaInput" />
-                            <button id="btnAgregarMed" class="btn-primary btn-med">Guardar</button>
-                        </div>
-                        <datalist id="listaMedicamentos">
-                            <option value="Metformina"></option>
-                            <option value="Glibenclamida"></option>
-                            <option value="Gliclazida"></option>
-                            <option value="Glimepirida"></option>
-                            <option value="Insulina Glargina"></option>
-                            <option value="Insulina NPH"></option>
-                            <option value="Insulina Lispro"></option>
-                            <option value="Insulina Aspart"></option>
-                            <option value="Insulina Detemir"></option>
-                            <option value="Insulina Regular"></option>
-                            <option value="Sitagliptina"></option>
-                            <option value="Linagliptina"></option>
-                            <option value="Vildagliptina"></option>
-                            <option value="Empagliflozina"></option>
-                            <option value="Dapagliflozina"></option>
-                            <option value="Canagliflozina"></option>
-                            <option value="Pioglitazona"></option>
-                            <option value="Acarbosa"></option>
-                            <option value="Repaglinida"></option>
-                            <option value="Semaglutida"></option>
-                            <option value="Liraglutida"></option>
-                            <option value="Dulaglutida"></option>
-                            <option value="Escitalopram"></option>
-                            <option value="Sertralina"></option>
-                            <option value="Fluoxetina"></option>
-                            <option value="Paroxetina"></option>
-                            <option value="Venlafaxina"></option>
-                            <option value="Clonazepam"></option>
-                            <option value="Alprazolam"></option>
-                            <option value="Clotiazepam"></option>
-                            <option value="Quetiapina"></option>
-                            <option value="Olanzapina"></option>
-                            <option value="Risperidona"></option>
-                            <option value="Litio"></option>
-                            <option value="Ácido Valproico"></option>
-                            <option value="Bupropión"></option>
-                            <option value="Mirtazapina"></option>
-                            <option value="Omeprazol"></option>
-                            <option value="Losartán"></option>
-                            <option value="Enalapril"></option>
-                            <option value="Atorvastatina"></option>
-                        </datalist>
+            <!-- TABLA DE HISTORIAL -->
+            <div class="panel">
+                <div class="table-header">
+                    <h2>📋 Historial</h2>
+                    <div class="table-actions">
+                        <button id="btnExportarCSV" class="btn-secondary">📥 Exportar CSV</button>
+                        <button id="btnLimpiar" class="btn-danger">🗑️ Borrar todo</button>
                     </div>
-
-                    <!-- HISTORIAL DE MEDICAMENTOS -->
-                    <div class="panel panel-medicamentos">
-                        <div class="table-header">
-                            <h2>📋 Historial de medicamentos</h2>
-                            <div class="table-actions">
-                                <button id="btnLimpiarMed" class="btn-danger">🗑️ Borrar todo</button>
-                            </div>
-                        </div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Hora</th>
-                                        <th>Medicamento</th>
-                                        <th>Dosis</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaMedCuerpo"></tbody>
-                            </table>
-                        </div>
-                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Ayuno</th>
+                                <th>Almuerzo</th>
+                                <th>Cena</th>
+                                <th>Máximo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCuerpo"></tbody>
+                    </table>
                 </div>
             </div>
 
