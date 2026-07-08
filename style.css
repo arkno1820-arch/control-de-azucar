@@ -796,6 +796,13 @@ table {
     text-align: left;
 }
 
+/* Centrar valores de Ayuno / Almuerzo / Cena en el historial de glucemia */
+#tablaCuerpo td:nth-child(2),
+#tablaCuerpo td:nth-child(3),
+#tablaCuerpo td:nth-child(4) {
+    text-align: center;
+}
+
 th {
     background: #f8fafc;
     padding: 0.65rem 0.75rem;
