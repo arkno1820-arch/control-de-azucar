@@ -15,6 +15,8 @@ let cargando = false;
 let medicamentos = [];
 let medEditandoId = null;
 let regEditandoId = null;
+let modoEdicionGluc = false;
+let modoEdicionMed = false;
 
 // ============================================================
 // DOM REFS
@@ -39,6 +41,7 @@ const fechaInput = document.getElementById('fechaInput');
 const btnAgregar = document.getElementById('btnAgregar');
 const tablaCuerpo = document.getElementById('tablaCuerpo');
 const btnLimpiar = document.getElementById('btnLimpiar');
+const btnToggleEditGluc = document.getElementById('btnToggleEditGluc');
 const btnExportarCSV = document.getElementById('btnExportarCSV');
 const filtroComida = document.getElementById('filtroComida');
 const btnSync = document.getElementById('btnSincronizar');
@@ -54,6 +57,7 @@ const medFechaInput = document.getElementById('medFechaInput');
 const btnAgregarMed = document.getElementById('btnAgregarMed');
 const tablaMedCuerpo = document.getElementById('tablaMedCuerpo');
 const btnLimpiarMed = document.getElementById('btnLimpiarMed');
+const btnToggleEditMed = document.getElementById('btnToggleEditMed');
 const listaMedicamentos = document.getElementById('listaMedicamentos');
 
 let chartInstance = null;
@@ -417,8 +421,10 @@ function celdaGlucosa(valor) {
     return `<td>
         <span class="nivel-valor">${valor.nivel}</span>
         <span class="status-badge ${obtenerEstado(valor.nivel).clase}">${obtenerEstado(valor.nivel).texto}</span>
+        ${modoEdicionGluc ? `
         <button title="Editar" class="action-btn" onclick="iniciarEdicionGlucosa('${valor.id}')">✏️</button>
         <button title="Eliminar" class="action-btn" onclick="eliminarRegistroGlucosa('${valor.id}')">🗑️</button>
+        ` : ''}
     </td>`;
 }
 
@@ -771,6 +777,14 @@ async function inicializarApp() {
 
     btnLimpiar.addEventListener('click', borrarTodosLosDatos);
 
+    btnToggleEditGluc.addEventListener('click', function() {
+        modoEdicionGluc = !modoEdicionGluc;
+        regEditandoId = null;
+        btnToggleEditGluc.textContent = modoEdicionGluc ? '✅ Listo' : '✏️ Editar';
+        btnToggleEditGluc.classList.toggle('activo', modoEdicionGluc);
+        renderizar();
+    });
+
     btnExportarCSV.addEventListener('click', exportarCSV);
 
     btnLogout.addEventListener('click', function() {
@@ -898,8 +912,10 @@ function renderizarMedicamentos() {
                     <td style="font-weight:600; color:#111827;">${m.medicamento}</td>
                     <td>${m.dosis || '—'}</td>
                     <td>
+                        ${modoEdicionMed ? `
                         <button title="Editar" class="action-btn" onclick="iniciarEdicionMedicamento('${m.id}')">✏️</button>
                         <button title="Eliminar" class="action-btn" onclick="eliminarMedicamento('${m.id}')">🗑️</button>
+                        ` : ''}
                     </td>
                 </tr>`;
             }
@@ -1029,6 +1045,14 @@ btnAgregarMed.addEventListener('click', async function() {
 });
 
 btnLimpiarMed.addEventListener('click', borrarTodosLosMedicamentos);
+
+btnToggleEditMed.addEventListener('click', function() {
+    modoEdicionMed = !modoEdicionMed;
+    medEditandoId = null;
+    btnToggleEditMed.textContent = modoEdicionMed ? '✅ Listo' : '✏️ Editar';
+    btnToggleEditMed.classList.toggle('activo', modoEdicionMed);
+    renderizarMedicamentos();
+});
 
 // ============================================================
 // INICIO
