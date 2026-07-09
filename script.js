@@ -14,6 +14,7 @@ let datosCargados = false;
 let cargando = false;
 let medicamentos = [];
 let medEditandoId = null;
+let regEditandoId = null;
 
 // ============================================================
 // DOM REFS
@@ -265,6 +266,7 @@ async function cargarDeDrive() {
         if (data.success) {
             if (data.datos && Array.isArray(data.datos)) {
                 registros = data.datos;
+                registros.forEach(r => { if (!r.id) r.id = crypto.randomUUID(); });
                 registros.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
                 datosCargados = true;
                 syncIndicator.textContent = '✅';
@@ -317,18 +319,30 @@ function renderizar() {
         return;
     }
 
+    // ===== AGRUPAR POR DÍA (se usa tanto para tarjetas como para la tabla) =====
+    const registrosPorDia = {};
+    registros.forEach(r => {
+        const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
+        if (!registrosPorDia[fechaKey]) {
+            registrosPorDia[fechaKey] = { ayuno: null, almuerzo: null, cena: null };
+        }
+        registrosPorDia[fechaKey][r.comida] = { nivel: r.nivel, id: r.id };
+    });
+
+    const diasOrdenados = Object.keys(registrosPorDia).sort((a, b) => b.localeCompare(a));
+    const ultimoDia = diasOrdenados[0];
+    const registrosUltimoDia = registrosPorDia[ultimoDia];
+
+    // ===== TARJETAS: valores del ÚLTIMO DÍA con datos =====
     const comidas = ['ayuno', 'almuerzo', 'cena'];
     const stats = {};
     comidas.forEach(c => {
+        const valorDia = registrosUltimoDia[c];
         const items = registros.filter(r => r.comida === c);
-        if (items.length === 0) {
-            stats[c] = { ultimo: null, promedio: null };
-        } else {
-            const ultimo = items[0];
-            const niveles = items.map(r => r.nivel);
-            const promedio = niveles.reduce((s, n) => s + n, 0) / niveles.length;
-            stats[c] = { ultimo: ultimo.nivel, promedio: promedio };
-        }
+        const promedio = items.length
+            ? items.map(r => r.nivel).reduce((s, n) => s + n, 0) / items.length
+            : null;
+        stats[c] = { ultimo: valorDia ? valorDia.nivel : null, promedio };
     });
 
     ultimoAyuno.textContent = stats.ayuno.ultimo !== null ? stats.ayuno.ultimo : '--';
@@ -337,36 +351,28 @@ function renderizar() {
     promAyuno.textContent = stats.ayuno.promedio !== null ? `Promedio: ${stats.ayuno.promedio.toFixed(0)}` : 'Promedio: --';
     promAlmuerzo.textContent = stats.almuerzo.promedio !== null ? `Promedio: ${stats.almuerzo.promedio.toFixed(0)}` : 'Promedio: --';
     promCena.textContent = stats.cena.promedio !== null ? `Promedio: ${stats.cena.promedio.toFixed(0)}` : 'Promedio: --';
-    totalRegistrosEl.textContent = registros.length;
 
-    // ===== TABLA POR DÍA CON MÁXIMO =====
-    const registrosPorDia = {};
-    registros.forEach(r => {
-        const fechaKey = new Date(r.fecha).toISOString().split('T')[0];
-        if (!registrosPorDia[fechaKey]) {
-            registrosPorDia[fechaKey] = { ayuno: null, almuerzo: null, cena: null };
-        }
-        registrosPorDia[fechaKey][r.comida] = r.nivel;
-    });
+    // Total: registros del último día (no el histórico completo)
+    const totalUltimoDia = [registrosUltimoDia.ayuno, registrosUltimoDia.almuerzo, registrosUltimoDia.cena].filter(v => v !== null).length;
+    totalRegistrosEl.textContent = totalUltimoDia;
 
-    const diasOrdenados = Object.keys(registrosPorDia).sort((a, b) => b.localeCompare(a));
-
+    // ===== TABLA POR DÍA CON MÁXIMO (con edición/eliminación en línea) =====
     let html = '';
     diasOrdenados.forEach(dia => {
         const registrosDia = registrosPorDia[dia];
         const valores = [];
-        if (registrosDia.ayuno !== null) valores.push(registrosDia.ayuno);
-        if (registrosDia.almuerzo !== null) valores.push(registrosDia.almuerzo);
-        if (registrosDia.cena !== null) valores.push(registrosDia.cena);
+        if (registrosDia.ayuno !== null) valores.push(registrosDia.ayuno.nivel);
+        if (registrosDia.almuerzo !== null) valores.push(registrosDia.almuerzo.nivel);
+        if (registrosDia.cena !== null) valores.push(registrosDia.cena.nivel);
         const maximo = valores.length > 0 ? Math.max(...valores) : null;
 
         const fechaFormateada = formatearFecha(dia);
 
         html += `<tr>
             <td><strong>${fechaFormateada}</strong></td>
-            <td>${registrosDia.ayuno !== null ? `<span class="nivel-valor">${registrosDia.ayuno}</span> <span class="status-badge ${obtenerEstado(registrosDia.ayuno).clase}">${obtenerEstado(registrosDia.ayuno).texto}</span>` : '—'}</td>
-            <td>${registrosDia.almuerzo !== null ? `<span class="nivel-valor">${registrosDia.almuerzo}</span> <span class="status-badge ${obtenerEstado(registrosDia.almuerzo).clase}">${obtenerEstado(registrosDia.almuerzo).texto}</span>` : '—'}</td>
-            <td>${registrosDia.cena !== null ? `<span class="nivel-valor">${registrosDia.cena}</span> <span class="status-badge ${obtenerEstado(registrosDia.cena).clase}">${obtenerEstado(registrosDia.cena).texto}</span>` : '—'}</td>
+            ${celdaGlucosa(registrosDia.ayuno)}
+            ${celdaGlucosa(registrosDia.almuerzo)}
+            ${celdaGlucosa(registrosDia.cena)}
             <td>${maximo !== null ? `<span class="nivel-maximo">${maximo}</span>` : '—'}</td>
         </tr>`;
     });
@@ -382,6 +388,104 @@ function renderizar() {
     datosFiltrados = datosFiltrados.reverse();
     actualizarGrafica(datosFiltrados);
 }
+
+// Renderiza una celda individual de la tabla de glucemia (valor normal o formulario de edición)
+function celdaGlucosa(valor) {
+    if (valor === null) return '<td>—</td>';
+
+    if (regEditandoId === valor.id) {
+        const registro = registros.find(r => r.id === valor.id);
+        if (!registro) return '<td>—</td>';
+        const fechaValor = new Date(registro.fecha).toISOString().slice(0, 10);
+        return `<td>
+            <div class="gluc-edit-box">
+                <select id="editComida-${registro.id}">
+                    <option value="ayuno" ${registro.comida === 'ayuno' ? 'selected' : ''}>🌅 Ayuno</option>
+                    <option value="almuerzo" ${registro.comida === 'almuerzo' ? 'selected' : ''}>🍽️ Almuerzo</option>
+                    <option value="cena" ${registro.comida === 'cena' ? 'selected' : ''}>🌙 Cena</option>
+                </select>
+                <input type="number" id="editNivel-${registro.id}" value="${registro.nivel}" min="10" max="500" />
+                <input type="date" id="editFechaGluc-${registro.id}" value="${fechaValor}" />
+                <div class="gluc-edit-actions">
+                    <button onclick="guardarEdicionGlucosa('${registro.id}')" class="btn-primary">✅</button>
+                    <button onclick="cancelarEdicionGlucosa()" class="btn-danger">✖</button>
+                </div>
+            </div>
+        </td>`;
+    }
+
+    return `<td>
+        <span class="nivel-valor">${valor.nivel}</span>
+        <span class="status-badge ${obtenerEstado(valor.nivel).clase}">${obtenerEstado(valor.nivel).texto}</span>
+        <button title="Editar" class="action-btn" onclick="iniciarEdicionGlucosa('${valor.id}')">✏️</button>
+        <button title="Eliminar" class="action-btn" onclick="eliminarRegistroGlucosa('${valor.id}')">🗑️</button>
+    </td>`;
+}
+
+function iniciarEdicionGlucosa(id) {
+    regEditandoId = id;
+    renderizar();
+}
+
+function cancelarEdicionGlucosa() {
+    regEditandoId = null;
+    renderizar();
+}
+
+async function guardarEdicionGlucosa(id) {
+    const registro = registros.find(r => r.id === id);
+    if (!registro) return;
+
+    const nuevoNivel = parseFloat(document.getElementById(`editNivel-${id}`).value);
+    const nuevaFecha = document.getElementById(`editFechaGluc-${id}`).value;
+    const nuevaComida = document.getElementById(`editComida-${id}`).value;
+
+    if (isNaN(nuevoNivel) || nuevoNivel < 10 || nuevoNivel > 500) {
+        mostrarMensaje('❌ Nivel válido: 10-500 mg/dL', 'error');
+        return;
+    }
+
+    const anterior = { ...registro };
+    registro.nivel = nuevoNivel;
+    registro.fecha = nuevaFecha ? new Date(nuevaFecha).toISOString() : registro.fecha;
+    registro.comida = nuevaComida;
+
+    const guardado = await guardarEnDrive(registros);
+    if (guardado) {
+        regEditandoId = null;
+        registros.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        renderizar();
+        mostrarMensaje('✅ Registro actualizado', 'success');
+    } else {
+        Object.assign(registro, anterior);
+        renderizar();
+    }
+}
+
+async function eliminarRegistroGlucosa(id) {
+    const registro = registros.find(r => r.id === id);
+    if (!registro) return;
+
+    const confirmacion = confirm(`¿Eliminar el registro de ${registro.comida} (${registro.nivel} mg/dL) del ${formatearFecha(registro.fecha)}?`);
+    if (!confirmacion) return;
+
+    const respaldo = registros.slice();
+    registros = registros.filter(r => r.id !== id);
+
+    const guardado = await guardarEnDrive(registros);
+    if (guardado) {
+        renderizar();
+        mostrarMensaje('🗑️ Registro eliminado', 'warning');
+    } else {
+        registros = respaldo;
+        renderizar();
+    }
+}
+
+window.iniciarEdicionGlucosa = iniciarEdicionGlucosa;
+window.cancelarEdicionGlucosa = cancelarEdicionGlucosa;
+window.guardarEdicionGlucosa = guardarEdicionGlucosa;
+window.eliminarRegistroGlucosa = eliminarRegistroGlucosa;
 
 // ============================================================
 // GRÁFICA
@@ -479,7 +583,7 @@ async function agregarRegistro(nivel, fechaStr, comida) {
     }
     fecha = d.toISOString();
 
-    registros.unshift({ fecha, nivel, comida });
+    registros.unshift({ id: crypto.randomUUID(), fecha, nivel, comida });
 
     const guardado = await guardarEnDrive(registros);
 
