@@ -858,6 +858,43 @@ tr:hover td {
     transform: scale(1.1);
 }
 
+/* Caja de edición en línea dentro de una celda de la tabla de glucemia */
+.gluc-edit-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: stretch;
+    min-width: 120px;
+    padding: 0.35rem;
+}
+
+.gluc-edit-box select,
+.gluc-edit-box input {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    padding: 0.4rem;
+    border-radius: 6px;
+    font-size: 16px;
+    outline: none;
+    width: 100%;
+}
+
+.gluc-edit-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.gluc-edit-actions button {
+    flex: 1;
+    border: none;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
 /* Custom indicator states badges */
 .status-badge {
     display: inline-block;
